@@ -1,0 +1,19 @@
+[package]
+name = "m3u8-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+m3u8-core = { path = "../../crates/m3u8-core" }
+dotenv = "0.15"
+lazy_static = "1.4"
+regex = "1.10"

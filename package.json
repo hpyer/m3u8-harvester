@@ -1,0 +1,49 @@
+{
+  "name": "m3u8-harvester",
+  "private": true,
+  "scripts": {
+    "dev:server": "cargo run -p m3u8-server",
+    "dev:web": "pnpm --filter @m3u8-harvester/web dev",
+    "build:server": "cargo build --release -p m3u8-server",
+    "build:web": "pnpm --filter @m3u8-harvester/web build",
+    "build": "pnpm build:web && pnpm build:server",
+    "lint:web": "pnpm --filter @m3u8-harvester/web lint",
+    "lint:rust": "cargo clippy --workspace -- -D warnings",
+    "lint": "pnpm lint:web && pnpm lint:rust",
+    "format:web": "prettier --write .",
+    "format:rust": "cargo fmt --all",
+    "format": "pnpm format:web && pnpm format:rust",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js,vue}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.rs": [
+      "cargo fmt --",
+      "cargo clippy --fix --allow-dirty --allow-staged -- -D warnings"
+    ],
+    "*.{json,md,css,scss}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "@eslint/js": "^10.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
+    "@typescript-eslint/parser": "^8.58.1",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.8.0",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.2",
+    "typescript-eslint": "^8.58.1"
+  }
+}

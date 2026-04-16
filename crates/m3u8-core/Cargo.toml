@@ -1,0 +1,20 @@
+[package]
+name = "m3u8-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+reqwest = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+m3u8-rs = "5.0"
+futures-util = "0.3"
+regex = "1.10"
+url = "2.5"
+async-recursion = "1.1"
