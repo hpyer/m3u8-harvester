@@ -2,21 +2,39 @@ name: Docker Publish
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
 
 concurrency:
   group: docker-publish-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  precheck:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag commit is on main
+        id: check
+        run: |
+          git fetch origin main --no-tags
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "Tag commit $GITHUB_SHA is not on origin/main, skip Docker build."
+          fi
+
   docker:
+    needs: precheck
+    if: needs.precheck.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -33,7 +51,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -59,7 +76,7 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           build-args: |
             APP_DOCKER_IMAGE=ghcr.io/${{ github.repository }}
             APP_DOCKER_VERSION=${{ steps.meta.outputs.version }}
