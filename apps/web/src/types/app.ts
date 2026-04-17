@@ -64,6 +64,14 @@ export interface AppSettings {
   proxy: string;
 }
 
+export interface AppVersionInfo {
+  serverVersion: string;
+  webVersion: string;
+  dockerImage: string;
+  dockerVersion: string;
+  tauriVersion: string | null;
+}
+
 export interface AddTaskPayload {
   title: string;
   category: TaskCategory;

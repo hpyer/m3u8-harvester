@@ -10,6 +10,12 @@ RUN pnpm --filter @m3u8-harvester/web build
 FROM rust:alpine AS backend-builder
 WORKDIR /app
 RUN apk add --no-cache musl-dev
+ARG APP_DOCKER_IMAGE=ghcr.io/hpyer/m3u8-harvester
+ARG APP_DOCKER_VERSION=1.0.0
+ARG APP_TAURI_VERSION=
+ENV APP_DOCKER_IMAGE=${APP_DOCKER_IMAGE}
+ENV APP_DOCKER_VERSION=${APP_DOCKER_VERSION}
+ENV APP_TAURI_VERSION=${APP_TAURI_VERSION}
 COPY . .
 # 使用锁文件保证本地与 CI 构建结果一致
 RUN cargo build --release --locked -p m3u8-server

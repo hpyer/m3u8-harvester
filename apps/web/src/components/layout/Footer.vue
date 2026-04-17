@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia';
+import { useAppStore } from '../../stores/appStore';
 import CommonIcon from '../ui/CommonIcon.vue';
+
+const store = useAppStore();
+const { versionInfo } = storeToRefs(store);
 </script>
 
 <template>
@@ -11,7 +16,12 @@ import CommonIcon from '../ui/CommonIcon.vue';
         <span class="text-base md:text-lg">📦</span>
         <span class="font-bold text-xs md:text-sm">M3U8 Harvester</span>
       </div>
-      <span class="badge badge-xs badge-ghost opacity-40 scale-90">v1.1.0</span>
+      <span class="badge badge-xs badge-ghost opacity-50 scale-90"
+        >Server v{{ versionInfo.serverVersion }}</span
+      >
+      <span class="badge badge-xs badge-ghost opacity-50 scale-90"
+        >Web v{{ versionInfo.webVersion }}</span
+      >
       <span class="text-[9px] md:text-[10px] opacity-30">© 2026 All rights reserved.</span>
     </div>
 

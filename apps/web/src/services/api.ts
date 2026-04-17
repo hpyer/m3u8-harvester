@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   AddTaskPayload,
   AppSettings,
+  AppVersionInfo,
   FilesResponse,
   FolderInfo,
   TaskCategory,
@@ -152,6 +153,26 @@ const parseSettingsResponse = (value: unknown): Partial<AppSettings> => {
   };
 };
 
+const parseVersionResponse = (value: unknown): AppVersionInfo => {
+  if (!isRecord(value)) {
+    return {
+      serverVersion: 'unknown',
+      webVersion: 'unknown',
+      dockerImage: 'ghcr.io/hpyer/m3u8-harvester',
+      dockerVersion: '1.0.0',
+      tauriVersion: null,
+    };
+  }
+
+  return {
+    serverVersion: asString(value.serverVersion, 'unknown'),
+    webVersion: asString(value.webVersion, 'unknown'),
+    dockerImage: asString(value.dockerImage, 'ghcr.io/hpyer/m3u8-harvester'),
+    dockerVersion: asString(value.dockerVersion, '1.0.0'),
+    tauriVersion: asNullableString(value.tauriVersion),
+  };
+};
+
 export interface AppApi {
   getTasks(): Promise<TaskGroup[]>;
   respondOverwrite(taskId: string, overwrite: boolean): Promise<void>;
@@ -160,6 +181,7 @@ export interface AppApi {
   deleteTask(id: string): Promise<void>;
   getFiles(): Promise<FilesResponse>;
   getSettings(): Promise<Partial<AppSettings>>;
+  getVersionInfo(): Promise<AppVersionInfo>;
   saveSettings(settings: AppSettings): Promise<void>;
   createTask(task: AddTaskPayload): Promise<void>;
   deleteFile(id: string): Promise<void>;
@@ -203,6 +225,11 @@ class HttpAppApi implements AppApi {
     return parseSettingsResponse(res.data);
   }
 
+  async getVersionInfo() {
+    const res = await axios.get<unknown>(`${API_BASE}/api/meta/version`);
+    return parseVersionResponse(res.data);
+  }
+
   async saveSettings(settings: AppSettings) {
     await axios.post(`${API_BASE}/api/settings`, settings);
   }
@@ -235,12 +262,12 @@ export const api = {
   deleteTask: (id: string) => apiClient.deleteTask(id),
   getFiles: () => apiClient.getFiles(),
   getSettings: () => apiClient.getSettings(),
+  getVersionInfo: () => apiClient.getVersionInfo(),
   saveSettings: (settings: AppSettings) => apiClient.saveSettings(settings),
   createTask: (task: AddTaskPayload) => apiClient.createTask(task),
   deleteFile: (id: string) => apiClient.deleteFile(id),
   deleteFolder: (id: string) => apiClient.deleteFolder(id),
-  renameFileOrFolder: (id: string, newName: string) =>
-    apiClient.renameFileOrFolder(id, newName),
+  renameFileOrFolder: (id: string, newName: string) => apiClient.renameFileOrFolder(id, newName),
 };
 
 export const setApiClient = (client: AppApi) => {

@@ -106,6 +106,10 @@ async fn main() {
             get(handlers::setting_handler::get_settings)
                 .post(handlers::setting_handler::update_settings),
         )
+        .route(
+            "/api/meta/version",
+            get(handlers::meta_handler::get_app_version),
+        )
         .route("/api/files", get(handlers::file_handler::list_files))
         .route(
             "/api/files/:id",

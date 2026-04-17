@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import type {
   AddTaskPayload,
   AppSettings,
+  AppVersionInfo,
   ConfirmationItem,
   FolderInfo,
   TaskCategory,
@@ -20,6 +21,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   userAgent:
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   proxy: '',
+};
+
+const DEFAULT_VERSION_INFO: AppVersionInfo = {
+  serverVersion: 'unknown',
+  webVersion: 'unknown',
+  dockerImage: 'ghcr.io/hpyer/m3u8-harvester',
+  dockerVersion: '1.0.0',
+  tauriVersion: null,
 };
 
 const createEmptyAddTaskPayload = (): AddTaskPayload => ({
@@ -40,6 +49,7 @@ export const useAppStore = defineStore('app', {
     localFolders: [] as FolderInfo[],
     downloadPath: '',
     settings: { ...DEFAULT_SETTINGS } as AppSettings,
+    versionInfo: { ...DEFAULT_VERSION_INFO } as AppVersionInfo,
     isAddTaskModalOpen: false,
     addTaskData: createEmptyAddTaskPayload(),
     isSettingsModalOpen: false,
@@ -88,7 +98,7 @@ export const useAppStore = defineStore('app', {
     },
     startPolling() {
       if (this.pollTimer) return;
-        this.pollTimer = setInterval(() => {
+      this.pollTimer = setInterval(() => {
         api
           .getTasks()
           .then((tasks) => {
@@ -127,9 +137,9 @@ export const useAppStore = defineStore('app', {
       // 乐观更新：立即寻找并更新本地状态
       const task = this.findTaskById(id);
       if (!task) return;
-      
+
       const oldStatuses = this.captureStatuses(task);
-      
+
       // 执行变更
       this.applyOptimisticPause(task);
       this.syncParentStatus(id);
@@ -150,7 +160,7 @@ export const useAppStore = defineStore('app', {
       if (!task) return;
 
       const oldStatuses = this.captureStatuses(task);
-      
+
       // 执行变更
       this.applyOptimisticResume(task);
       this.syncParentStatus(id);
@@ -205,7 +215,10 @@ export const useAppStore = defineStore('app', {
           parent.status = 'paused';
         } else if (statuses.some((s) => ACTIVE_STATUSES.includes(s))) {
           parent.status = 'active';
-        } else if (statuses.some((s) => s === 'failed') && !statuses.some((s) => ACTIVE_STATUSES.includes(s))) {
+        } else if (
+          statuses.some((s) => s === 'failed') &&
+          !statuses.some((s) => ACTIVE_STATUSES.includes(s))
+        ) {
           parent.status = 'failed';
         }
 
@@ -244,11 +257,13 @@ export const useAppStore = defineStore('app', {
       // 如果更新的是子任务，尝试同步父任务状态
       for (const parent of this.tasks) {
         if (parent.subtasks.some((s) => s.id === taskId)) {
-          const allCompleted = parent.subtasks.every((s) => ['completed', 'skipped'].includes(s.status));
+          const allCompleted = parent.subtasks.every((s) =>
+            ['completed', 'skipped'].includes(s.status),
+          );
           const allPaused = parent.subtasks.every((s) => s.status === 'paused');
           const anyFailed = parent.subtasks.some((s) => s.status === 'failed');
           const anyActive = parent.subtasks.some((s) => ACTIVE_STATUSES.includes(s.status));
-          
+
           if (allCompleted) parent.status = 'completed';
           else if (allPaused) parent.status = 'paused';
           else if (anyActive) parent.status = 'active';
@@ -312,6 +327,13 @@ export const useAppStore = defineStore('app', {
         }
       } catch (_e) {
         // Ignore settings load error
+      }
+    },
+    async loadVersionInfo() {
+      try {
+        this.versionInfo = await api.getVersionInfo();
+      } catch (_e) {
+        // Ignore version info load error
       }
     },
     async saveSettings(newSettings: AppSettings) {

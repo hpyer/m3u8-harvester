@@ -25,7 +25,7 @@ onMounted(async () => {
   // 初始化主题
   document.documentElement.setAttribute('data-theme', store.theme);
 
-  await store.loadSettings();
+  await Promise.all([store.loadSettings(), store.loadVersionInfo()]);
 
   store.fetchTasks();
 });
