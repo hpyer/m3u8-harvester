@@ -8,4 +8,5 @@ services:
       - ./storage:/app/storage
     environment:
       - RUST_LOG=info
+      - DATABASE_URL=sqlite:/app/storage/db/app.db?mode=rwc
     restart: unless-stopped

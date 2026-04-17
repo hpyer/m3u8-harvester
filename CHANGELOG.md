@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
+## [1.0.1] - 2026-04-17
+
+### Added
+
+- Added root `.env.example` to align local development defaults with the documented environment setup.
+- Added Docker troubleshooting guidance for SQLite initialization failures and explicit storage directory preparation steps.
+
+### Changed
+
+- Updated Docker image defaults and compose examples to use `sqlite:/app/storage/db/app.db?mode=rwc`.
+- Created `/app/storage/temp` in the runtime image to match the project's expected storage layout.
+- Bumped server, core, web, and Docker version metadata to `1.0.1`.
+
+### Fixed
+
+- Fixed SQLite initialization to create the database file before opening the connection.
+- Fixed SQLite path extraction for file URLs that include query parameters such as `?mode=rwc`.
+
 ## [1.0.0] - 2026-04-17
 
 ### Added

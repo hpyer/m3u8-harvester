@@ -1,18 +1,40 @@
 use anyhow::Result;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::path::Path;
 
+fn sqlite_file_path(database_url: &str) -> Option<&str> {
+    let raw_path = if let Some(path) = database_url.strip_prefix("sqlite:") {
+        path
+    } else if let Some(path) = database_url.strip_prefix("file:") {
+        path
+    } else {
+        return None;
+    };
+
+    let path_without_query = raw_path
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(raw_path);
+
+    if path_without_query.is_empty() || path_without_query == ":memory:" {
+        return None;
+    }
+
+    Some(path_without_query)
+}
+
 pub async fn init_db(database_url: &str) -> Result<SqlitePool> {
-    // 确保数据库文件所在目录存在
-    if let Some(path_str) = database_url.strip_prefix("sqlite:") {
+    // 确保数据库文件及其父目录在连接前已经存在，避免 SQLite 因路径不存在而启动失败。
+    if let Some(path_str) = sqlite_file_path(database_url) {
         if let Some(parent) = Path::new(path_str).parent() {
             fs::create_dir_all(parent)?;
         }
-    } else if let Some(path_str) = database_url.strip_prefix("file:") {
-        if let Some(parent) = Path::new(path_str).parent() {
-            fs::create_dir_all(parent)?;
-        }
+
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path_str)?;
     }
 
     let pool = SqlitePoolOptions::new()
@@ -58,4 +80,30 @@ pub async fn init_db(database_url: &str) -> Result<SqlitePool> {
         .await;
 
     Ok(pool)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sqlite_file_path;
+
+    #[test]
+    fn extracts_relative_sqlite_path() {
+        assert_eq!(
+            sqlite_file_path("sqlite:storage/db/app.db"),
+            Some("storage/db/app.db")
+        );
+    }
+
+    #[test]
+    fn extracts_absolute_sqlite_path_with_query() {
+        assert_eq!(
+            sqlite_file_path("sqlite:/app/storage/db/app.db?mode=rwc"),
+            Some("/app/storage/db/app.db")
+        );
+    }
+
+    #[test]
+    fn skips_memory_database() {
+        assert_eq!(sqlite_file_path("sqlite::memory:"), None);
+    }
 }

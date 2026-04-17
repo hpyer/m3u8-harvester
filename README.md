@@ -26,10 +26,14 @@
 ```bash
 docker pull ghcr.io/hpyer/m3u8-harvester:latest
 
+# 建议先准备持久化目录
+mkdir -p ./storage/db ./storage/downloads ./storage/temp
+
 # 运行镜像
 docker run -d \
   -p 6868:6868 \
   -v $(pwd)/storage:/app/storage \
+  -e DATABASE_URL='sqlite:/app/storage/db/app.db?mode=rwc' \
   --name m3u8-downloader \
   ghcr.io/hpyer/m3u8-harvester:latest
 ```
@@ -49,12 +53,14 @@ services:
       - ./storage:/app/storage
     environment:
       - RUST_LOG=info
+      - DATABASE_URL=sqlite:/app/storage/db/app.db?mode=rwc
     restart: unless-stopped
 ```
 
 运行：
 
 ```bash
+mkdir -p ./storage/db ./storage/downloads ./storage/temp
 docker-compose up -d
 ```
 
@@ -81,6 +87,13 @@ ghcr.io/hpyer/m3u8-harvester
 
 - `/app/storage/db`: SQLite 数据库
 - `/app/storage/downloads`: 下载完成后的 MP4 文件
+- `/app/storage/temp`: 下载中的临时分片与中间文件
+
+如果宿主机上对应目录不存在，建议先手动创建：
+
+```bash
+mkdir -p ./storage/db ./storage/downloads ./storage/temp
+```
 
 ### 本地自行构建镜像
 
@@ -88,10 +101,40 @@ ghcr.io/hpyer/m3u8-harvester
 
 ```bash
 docker build -t m3u8-harvester .
+mkdir -p ./storage/db ./storage/downloads ./storage/temp
 docker run -d \
   -p 6868:6868 \
   -v $(pwd)/storage:/app/storage \
+  -e DATABASE_URL='sqlite:/app/storage/db/app.db?mode=rwc' \
   --name m3u8-downloader \
+  m3u8-harvester
+```
+
+### Docker 常见问题
+
+如果容器启动后立即退出，并出现以下错误：
+
+```text
+Failed to initialize database: error returned from database: (code: 14) unable to open database file
+```
+
+通常需要检查这几项：
+
+- 宿主机挂载的 `./storage` 是否存在，且 Docker 有权限读写。
+- 是否使用了较旧的镜像版本。重新 `docker pull` 或本地 `docker build` 后再启动。
+- `DATABASE_URL` 是否指向容器内可写路径。推荐使用 `sqlite:/app/storage/db/app.db?mode=rwc`。
+
+可用下面命令快速重建并启动：
+
+```bash
+docker rm -f m3u8-harvester 2>/dev/null || true
+docker build -t m3u8-harvester .
+mkdir -p ./storage/db ./storage/downloads ./storage/temp
+docker run -d \
+  -p 6868:6868 \
+  -v $(pwd)/storage:/app/storage \
+  -e DATABASE_URL='sqlite:/app/storage/db/app.db?mode=rwc' \
+  --name m3u8-harvester \
   m3u8-harvester
 ```
 
@@ -126,7 +169,13 @@ pnpm install
 
 ### 3. 环境变量 (.env)
 
-你可以在根目录下创建 `.env` 文件：
+你可以直接基于根目录下的 `.env.example` 创建 `.env`：
+
+```bash
+cp .env.example .env
+```
+
+默认内容如下：
 
 ```env
 PORT=6868

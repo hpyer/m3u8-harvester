@@ -159,7 +159,7 @@ const parseVersionResponse = (value: unknown): AppVersionInfo => {
       serverVersion: 'unknown',
       webVersion: 'unknown',
       dockerImage: 'ghcr.io/hpyer/m3u8-harvester',
-      dockerVersion: '1.0.0',
+      dockerVersion: '1.0.1',
       tauriVersion: null,
     };
   }
@@ -168,7 +168,7 @@ const parseVersionResponse = (value: unknown): AppVersionInfo => {
     serverVersion: asString(value.serverVersion, 'unknown'),
     webVersion: asString(value.webVersion, 'unknown'),
     dockerImage: asString(value.dockerImage, 'ghcr.io/hpyer/m3u8-harvester'),
-    dockerVersion: asString(value.dockerVersion, '1.0.0'),
+    dockerVersion: asString(value.dockerVersion, '1.0.1'),
     tauriVersion: asNullableString(value.tauriVersion),
   };
 };

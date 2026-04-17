@@ -18,7 +18,7 @@ fn main() {
 
     let docker_image =
         env::var("APP_DOCKER_IMAGE").unwrap_or_else(|_| "ghcr.io/hpyer/m3u8-harvester".to_string());
-    let docker_version = env::var("APP_DOCKER_VERSION").unwrap_or_else(|_| "1.0.0".to_string());
+    let docker_version = env::var("APP_DOCKER_VERSION").unwrap_or_else(|_| "1.0.1".to_string());
     let tauri_version = env::var("APP_TAURI_VERSION").unwrap_or_default();
 
     println!("cargo:rustc-env=APP_WEB_VERSION={web_version}");

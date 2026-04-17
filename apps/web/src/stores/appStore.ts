@@ -27,7 +27,7 @@ const DEFAULT_VERSION_INFO: AppVersionInfo = {
   serverVersion: 'unknown',
   webVersion: 'unknown',
   dockerImage: 'ghcr.io/hpyer/m3u8-harvester',
-  dockerVersion: '1.0.0',
+  dockerVersion: '1.0.1',
   tauriVersion: null,
 };
 

@@ -11,7 +11,7 @@ FROM rust:alpine AS backend-builder
 WORKDIR /app
 RUN apk add --no-cache musl-dev
 ARG APP_DOCKER_IMAGE=ghcr.io/hpyer/m3u8-harvester
-ARG APP_DOCKER_VERSION=1.0.0
+ARG APP_DOCKER_VERSION=1.0.1
 ARG APP_TAURI_VERSION=
 ENV APP_DOCKER_IMAGE=${APP_DOCKER_IMAGE}
 ENV APP_DOCKER_VERSION=${APP_DOCKER_VERSION}
@@ -32,7 +32,7 @@ RUN apk add --no-cache ffmpeg openssl libgcc libstdc++ && \
 ENV RUST_LOG=info \
     PORT=6868 \
     STORAGE_PATH=/app/storage \
-    DATABASE_URL="sqlite:/app/storage/db/app.db" \
+    DATABASE_URL="sqlite:/app/storage/db/app.db?mode=rwc" \
     STATIC_DIR=/app/dist
 
 # 复制产物
@@ -40,7 +40,7 @@ COPY --from=backend-builder /app/target/release/m3u8-server ./m3u8-server
 COPY --from=frontend-builder /app/apps/web/dist ./dist
 
 # 创建必要的目录
-RUN mkdir -p /app/storage/db /app/storage/downloads && \
+RUN mkdir -p /app/storage/db /app/storage/downloads /app/storage/temp && \
     chmod -R 777 /app/storage
 
 EXPOSE 6868
