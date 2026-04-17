@@ -11,8 +11,8 @@ FROM rust:alpine AS backend-builder
 WORKDIR /app
 RUN apk add --no-cache musl-dev
 COPY . .
-# 更新依赖并编译二进制文件
-RUN cargo update && cargo build --release -p m3u8-server
+# 使用锁文件保证本地与 CI 构建结果一致
+RUN cargo build --release --locked -p m3u8-server
 
 # --- Stage 3: Final Runner ---
 FROM alpine:3.19 AS runner

@@ -19,19 +19,19 @@
 
 ## 快速开始 (Docker)
 
-推荐使用 Docker 一键部署，镜像内已包含 Rust 编译产物及 FFmpeg 依赖。
+推荐直接使用 GitHub Container Registry 中已构建好的镜像，镜像内已包含 Rust 编译产物及 FFmpeg 依赖。
 
 ### 使用 Docker Run
 
 ```bash
-docker build -t m3u8-harvester .
+docker pull ghcr.io/hpyer/m3u8-harvester:latest
 
 # 运行镜像
 docker run -d \
   -p 6868:6868 \
   -v $(pwd)/storage:/app/storage \
   --name m3u8-downloader \
-  m3u8-harvester
+  ghcr.io/hpyer/m3u8-harvester:latest
 ```
 
 ### 使用 Docker Compose
@@ -41,7 +41,7 @@ docker run -d \
 ```yaml
 services:
   m3u8-harvester:
-    build: .
+    image: ghcr.io/hpyer/m3u8-harvester:latest
     container_name: m3u8-harvester
     ports:
       - '6868:6868'
@@ -58,12 +58,42 @@ services:
 docker-compose up -d
 ```
 
+### GitHub Actions 自动构建
+
+仓库已提供 GitHub Actions workflow：
+
+- 文件：`.github/workflows/docker-publish.yml`
+- 推送 `main` 分支时自动构建并发布 `latest`
+- 推送 `v*` 标签时自动发布对应版本标签
+- `pull_request` 到 `main` 时只执行构建，不推送镜像
+
+默认发布地址：
+
+```text
+ghcr.io/hpyer/m3u8-harvester
+```
+
+如果仓库是首次发布 GHCR 包，请到 GitHub 的 `Packages` 设置中确认该镜像已设为公开可拉取。
+
 ### 挂载说明
 
 为了保证数据持久化和方便导出视频，请务必挂载 `/app/storage` 目录：
 
 - `/app/storage/db`: SQLite 数据库
 - `/app/storage/downloads`: 下载完成后的 MP4 文件
+
+### 本地自行构建镜像
+
+如果你不想使用 GHCR，也可以继续本地构建：
+
+```bash
+docker build -t m3u8-harvester .
+docker run -d \
+  -p 6868:6868 \
+  -v $(pwd)/storage:/app/storage \
+  --name m3u8-downloader \
+  m3u8-harvester
+```
 
 ## 本地开发指南 (不使用 Docker)
 

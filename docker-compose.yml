@@ -1,7 +1,6 @@
 services:
   m3u8-harvester:
-    build: .
-    image: hpyer/m3u8-harvester:latest
+    image: ghcr.io/hpyer/m3u8-harvester:latest
     container_name: m3u8-harvester
     ports:
       - "6868:6868"
