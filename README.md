@@ -2,6 +2,15 @@
 
 轻量级 M3U8 视频流下载合并工具，支持并发下载、实时进度监控及自动 FFmpeg 合并。
 
+## 核心特性
+
+- ✅ **M3U8 解析**: 自动补全相对路径，处理重定向。
+- ✅ **并发下载**: 后端受控并发（默认 5 线程），无内存溢出的流式下载。
+- ✅ **实时进度**: 自动刷新机制，实时展示下载百分比及状态变化。
+- ✅ **FFmpeg 合并**: 无损快速合并，支持用户自定义文件名。
+- ✅ **任务管理**: 完整的 CRUD，支持物理文件清理。
+- ✅ **单镜像部署**: 前后端合一，轻量高效。
+
 ## 技术栈
 
 - **Frontend:** Vue 3 (Composition API), TypeScript, Vite, Tailwind CSS, DaisyUI
@@ -35,7 +44,7 @@ services:
     build: .
     container_name: m3u8-harvester
     ports:
-      - "6868:6868"
+      - '6868:6868'
     volumes:
       - ./storage:/app/storage
     environment:
@@ -64,10 +73,17 @@ docker-compose up -d
 
 - **Rust**: 建议版本 v1.75+
 - **Node.js**: 建议版本 v20+ (用于前端构建)
+- **pnpm**: 用于前端依赖与根脚本管理
 - **FFmpeg**: 确保你的电脑已安装 `ffmpeg` 并已添加到系统环境变量 (Path) 中。
   - macOS: `brew install ffmpeg`
   - Windows: [下载并配置环境变量](https://ffmpeg.org/download.html)
   - Ubuntu/Debian: `sudo apt install ffmpeg`
+
+安装依赖：
+
+```bash
+pnpm install
+```
 
 ### 2. 运行开发模式
 
@@ -89,14 +105,85 @@ DATABASE_URL=sqlite:storage/db/app.db
 RUST_LOG=info
 ```
 
-## 核心特性
+### 4. 仓库结构
 
-- ✅ **M3U8 解析**: 自动补全相对路径，处理重定向。
-- ✅ **并发下载**: 后端受控并发（默认 5 线程），无内存溢出的流式下载。
-- ✅ **实时进度**: 自动刷新机制，实时展示下载百分比及状态变化。
-- ✅ **FFmpeg 合并**: 无损快速合并，支持用户自定义文件名。
-- ✅ **任务管理**: 完整的 CRUD，支持物理文件清理。
-- ✅ **单镜像部署**: 前后端合一，轻量高效。
+```text
+apps/
+  server/   # Axum 服务端，处理 HTTP 接口和下载流程编排
+  web/      # Vue 3 前端
+crates/
+  m3u8-core/ # 核心领域逻辑、数据库服务、下载器、文件树与合并逻辑
+storage/
+  db/       # SQLite 数据库
+  downloads/# 已合并输出的视频文件
+  temp/     # 下载中的临时文件
+```
+
+### 5. 常用命令
+
+开发：
+
+```bash
+pnpm dev:web
+pnpm dev:server
+```
+
+构建：
+
+```bash
+pnpm build:web
+pnpm build:server
+pnpm build
+```
+
+检查与格式化：
+
+```bash
+pnpm lint:web
+pnpm lint:rust
+pnpm lint
+
+pnpm format:web
+pnpm format:rust
+pnpm format
+```
+
+测试：
+
+```bash
+cargo test -p m3u8-server
+cargo test -p m3u8-core
+cargo test --workspace
+```
+
+常见最小验证集：
+
+```bash
+pnpm --filter @m3u8-harvester/web build
+cargo fmt --all
+cargo clippy --workspace -- -D warnings
+```
+
+### 6. 提交约束
+
+项目已启用 Husky：
+
+- `pre-commit` 会执行 `lint-staged`
+- `commit-msg` 会执行 `commitlint`
+
+其中：
+
+- `*.ts`、`*.js`、`*.vue` 会自动执行 `eslint --fix` 和 `prettier --write`
+- `*.rs` 会自动执行 `cargo fmt --` 和 `cargo clippy --fix --allow-dirty --allow-staged --all-targets -- -D warnings`
+
+建议在提交前先自行跑一遍对应命令，避免在 hook 阶段才发现问题。
+
+### 7. 开发注意事项
+
+- `storage/` 是运行时目录，不是源码目录，不要随意提交其中内容。
+- 剧集/综艺/动漫下载会保留 `Sxx` season 子目录，修改下载路径或文件树接口时不要把该层级拍平。
+- 文件列表接口与前端目录树需要保持一致，涉及本地文件展示时通常要同步检查服务端和前端类型。
+- 更详细的协作约定见 [AGENTS.md](./AGENTS.md)。
 
 ## 免责声明
 
