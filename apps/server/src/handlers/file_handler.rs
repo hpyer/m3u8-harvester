@@ -1,11 +1,11 @@
+use crate::AppState;
 use axum::{
     extract::{Path, State},
     Json,
 };
-use crate::AppState;
 use m3u8_core::FolderInfo;
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Serialize)]
 pub struct ListFilesResponse {
@@ -14,12 +14,10 @@ pub struct ListFilesResponse {
     pub download_path: String,
 }
 
-pub async fn list_files(
-    State(state): State<Arc<AppState>>,
-) -> Json<ListFilesResponse> {
+pub async fn list_files(State(state): State<Arc<AppState>>) -> Json<ListFilesResponse> {
     let folders = state.file_service.list_folders().await.unwrap_or_default();
     let download_path = state.file_service.get_base_path();
-    
+
     Json(ListFilesResponse {
         folders,
         download_path,

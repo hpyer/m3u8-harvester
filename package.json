@@ -22,7 +22,7 @@
     ],
     "*.rs": [
       "cargo fmt --",
-      "cargo clippy --fix --allow-dirty --allow-staged -- -D warnings"
+      "sh -c 'cargo clippy --fix --allow-dirty --allow-staged --all-targets -- -D warnings'"
     ],
     "*.{json,md,css,scss}": [
       "prettier --write"

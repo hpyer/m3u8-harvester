@@ -1,3 +1,3 @@
 pub mod downloader;
 
-pub use downloader::{Downloader, DownloadProgress, DownloadOptions};
+pub use downloader::{DownloadOptions, DownloadProgress, Downloader};

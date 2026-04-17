@@ -1,8 +1,8 @@
-use anyhow::{Result, anyhow};
-use reqwest::Client;
+use anyhow::{anyhow, Result};
 use m3u8_rs::Playlist;
-use url::Url;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct M3U8Info {
@@ -17,7 +17,7 @@ pub async fn parse_m3u8(m3u8_url: &str) -> Result<M3U8Info> {
         .build()?;
 
     let response = client.get(m3u8_url).send().await?.text().await?;
-    
+
     match m3u8_rs::parse_playlist_res(response.as_bytes()) {
         Ok(Playlist::MediaPlaylist(playlist)) => {
             let base_url = Url::parse(m3u8_url)?;
@@ -29,7 +29,7 @@ pub async fn parse_m3u8(m3u8_url: &str) -> Result<M3U8Info> {
                 // 处理相对路径和绝对路径
                 let segment_url = base_url.join(&segment.uri)?;
                 full_urls.push(segment_url.to_string());
-                
+
                 if let Some(byte_range) = segment.byte_range {
                     total_size += byte_range.length;
                     has_size = true;
@@ -41,10 +41,10 @@ pub async fn parse_m3u8(m3u8_url: &str) -> Result<M3U8Info> {
                 base_url: m3u8_url.to_string(),
                 total_size: if has_size { Some(total_size) } else { None },
             })
-        },
-        Ok(Playlist::MasterPlaylist(_)) => {
-            Err(anyhow!("目前暂不支持解析 Master Playlist，请提供具体的 Media Playlist URL"))
-        },
+        }
+        Ok(Playlist::MasterPlaylist(_)) => Err(anyhow!(
+            "目前暂不支持解析 Master Playlist，请提供具体的 Media Playlist URL"
+        )),
         _ => Err(anyhow!("无法解析该 M3U8 文件")),
     }
 }

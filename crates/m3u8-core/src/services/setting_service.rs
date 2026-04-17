@@ -1,6 +1,6 @@
-use sqlx::SqlitePool;
-use anyhow::Result;
 use crate::models::setting::Setting;
+use anyhow::Result;
+use sqlx::SqlitePool;
 use std::collections::HashMap;
 
 pub struct SettingService {

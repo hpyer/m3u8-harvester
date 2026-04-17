@@ -1,5 +1,5 @@
-pub mod task;
 pub mod setting;
+pub mod task;
 
-pub use task::{Task, TaskStatus};
 pub use setting::Setting;
+pub use task::{Task, TaskStatus};

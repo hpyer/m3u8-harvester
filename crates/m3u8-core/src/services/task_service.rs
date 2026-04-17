@@ -1,9 +1,9 @@
-use sqlx::SqlitePool;
-use anyhow::Result;
-use uuid::Uuid;
-use chrono::Utc;
 use crate::models::task::Task;
+use anyhow::Result;
+use chrono::Utc;
 use serde::Serialize;
+use sqlx::SqlitePool;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -23,15 +23,12 @@ impl TaskService {
     }
 
     pub async fn get_tasks(&self) -> Result<Vec<TaskWithSubtasks>> {
-        let all_tasks = sqlx::query_as::<_, Task>(
-            "SELECT * FROM tasks ORDER BY created_at DESC"
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let all_tasks = sqlx::query_as::<_, Task>("SELECT * FROM tasks ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
+            .await?;
 
-        let (parent_tasks, subtasks): (Vec<Task>, Vec<Task>) = all_tasks
-            .into_iter()
-            .partition(|t| t.parent_id.is_none());
+        let (parent_tasks, subtasks): (Vec<Task>, Vec<Task>) =
+            all_tasks.into_iter().partition(|t| t.parent_id.is_none());
 
         let result = parent_tasks
             .into_iter()
@@ -89,7 +86,7 @@ impl TaskService {
     ) -> Result<Task> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
-        
+
         sqlx::query(
             r#"
             INSERT INTO tasks (id, group_title, title, type, year, season, status, percentage, created_at, updated_at)
@@ -120,7 +117,7 @@ impl TaskService {
         season: Option<String>,
     ) -> Result<Task> {
         let existing = sqlx::query_as::<_, Task>(
-            "SELECT * FROM tasks WHERE group_title = ? AND parent_id IS NULL LIMIT 1"
+            "SELECT * FROM tasks WHERE group_title = ? AND parent_id IS NULL LIMIT 1",
         )
         .bind(&title)
         .fetch_optional(&self.pool)
@@ -141,7 +138,8 @@ impl TaskService {
                 Ok(self.find_task(&task.id).await?.unwrap())
             }
             None => {
-                self.create_parent_task(Some(title.clone()), title, category, year, season).await
+                self.create_parent_task(Some(title.clone()), title, category, year, season)
+                    .await
             }
         }
     }
@@ -210,7 +208,11 @@ impl TaskService {
         Ok(())
     }
 
-    pub async fn update_task_completed_segments(&self, id: &str, completed_segments: i32) -> Result<()> {
+    pub async fn update_task_completed_segments(
+        &self,
+        id: &str,
+        completed_segments: i32,
+    ) -> Result<()> {
         let now = Utc::now();
         sqlx::query("UPDATE tasks SET completed_segments = ?, updated_at = ? WHERE id = ?")
             .bind(completed_segments)
@@ -281,11 +283,13 @@ impl TaskService {
 
     pub async fn retry_task(&self, id: &str) -> Result<()> {
         let now = Utc::now();
-        sqlx::query("UPDATE tasks SET status = 'pending', percentage = 0.0, updated_at = ? WHERE id = ?")
-            .bind(now)
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "UPDATE tasks SET status = 'pending', percentage = 0.0, updated_at = ? WHERE id = ?",
+        )
+        .bind(now)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
@@ -339,7 +343,9 @@ impl TaskService {
         let paused_count = subtasks.iter().filter(|t| t.status == "paused").count();
         let active_count = subtasks
             .iter()
-            .filter(|t| ["downloading", "merging", "pending", "parsing"].contains(&t.status.as_str()))
+            .filter(|t| {
+                ["downloading", "merging", "pending", "parsing"].contains(&t.status.as_str())
+            })
             .count();
 
         let total_progress: f64 = subtasks.iter().map(|t| t.percentage).sum();
@@ -411,15 +417,33 @@ mod tests {
         Ok(TaskService::new(pool))
     }
 
-    async fn create_parent_with_subtasks(service: &TaskService) -> Result<(String, String, String)> {
+    async fn create_parent_with_subtasks(
+        service: &TaskService,
+    ) -> Result<(String, String, String)> {
         let parent = service
-            .create_parent_task(Some("Group".into()), "Group".into(), "series".into(), None, None)
+            .create_parent_task(
+                Some("Group".into()),
+                "Group".into(),
+                "series".into(),
+                None,
+                None,
+            )
             .await?;
         let sub1 = service
-            .create_sub_task(parent.id.clone(), "Episode.1".into(), "https://example.com/1.m3u8".into(), "series".into())
+            .create_sub_task(
+                parent.id.clone(),
+                "Episode.1".into(),
+                "https://example.com/1.m3u8".into(),
+                "series".into(),
+            )
             .await?;
         let sub2 = service
-            .create_sub_task(parent.id.clone(), "Episode.2".into(), "https://example.com/2.m3u8".into(), "series".into())
+            .create_sub_task(
+                parent.id.clone(),
+                "Episode.2".into(),
+                "https://example.com/2.m3u8".into(),
+                "series".into(),
+            )
             .await?;
 
         Ok((parent.id, sub1.id, sub2.id))
@@ -479,7 +503,12 @@ mod tests {
         let service = create_test_service().await?;
         let (parent_id, sub1_id, sub2_id) = create_parent_with_subtasks(&service).await?;
         let sub3 = service
-            .create_sub_task(parent_id.clone(), "Episode.3".into(), "https://example.com/3.m3u8".into(), "series".into())
+            .create_sub_task(
+                parent_id.clone(),
+                "Episode.3".into(),
+                "https://example.com/3.m3u8".into(),
+                "series".into(),
+            )
             .await?;
 
         service.update_task_status(&sub1_id, "paused").await?;
@@ -488,9 +517,18 @@ mod tests {
 
         service.resume_task(&parent_id).await?;
 
-        assert_eq!(service.find_task(&sub1_id).await?.unwrap().status, "pending");
-        assert_eq!(service.find_task(&sub2_id).await?.unwrap().status, "pending");
-        assert_eq!(service.find_task(&sub3.id).await?.unwrap().status, "completed");
+        assert_eq!(
+            service.find_task(&sub1_id).await?.unwrap().status,
+            "pending"
+        );
+        assert_eq!(
+            service.find_task(&sub2_id).await?.unwrap().status,
+            "pending"
+        );
+        assert_eq!(
+            service.find_task(&sub3.id).await?.unwrap().status,
+            "completed"
+        );
         Ok(())
     }
 
@@ -505,7 +543,10 @@ mod tests {
         service.pause_task(&parent_id).await?;
 
         assert_eq!(service.find_task(&sub1_id).await?.unwrap().status, "paused");
-        assert_eq!(service.find_task(&sub2_id).await?.unwrap().status, "completed");
+        assert_eq!(
+            service.find_task(&sub2_id).await?.unwrap().status,
+            "completed"
+        );
         Ok(())
     }
 }

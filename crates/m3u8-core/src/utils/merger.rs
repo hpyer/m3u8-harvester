@@ -1,5 +1,5 @@
+use anyhow::{anyhow, Result};
 use std::path::Path;
-use anyhow::{Result, anyhow};
 use tokio::fs as tfs;
 use tracing::info;
 
@@ -8,7 +8,7 @@ pub struct VideoMerger;
 impl VideoMerger {
     pub async fn merge(temp_dir: &Path, output_file: &Path) -> Result<()> {
         info!("Merging segments in {:?} to {:?}", temp_dir, output_file);
-        
+
         // 确保输出目录存在
         if let Some(parent) = output_file.parent() {
             tfs::create_dir_all(parent).await?;
@@ -17,7 +17,7 @@ impl VideoMerger {
         // 创建 ffmpeg 列表文件
         let list_file_path = temp_dir.join("file_list.txt");
         let mut content = String::new();
-        
+
         let mut entries = Vec::new();
         let mut dir = tfs::read_dir(temp_dir).await?;
         while let Some(entry) = dir.next_entry().await? {
@@ -26,7 +26,7 @@ impl VideoMerger {
                 entries.push(path);
             }
         }
-        
+
         // 按文件名排序 (00000.ts, 00001.ts, ...)
         entries.sort();
 

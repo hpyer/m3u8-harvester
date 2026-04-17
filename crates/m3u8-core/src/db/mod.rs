@@ -1,5 +1,5 @@
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use anyhow::Result;
+use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::fs;
 use std::path::Path;
 
@@ -53,7 +53,9 @@ pub async fn init_db(database_url: &str) -> Result<SqlitePool> {
     .await?;
 
     // 尝试添加 missing columns (简单的迁移逻辑)
-    let _ = sqlx::query("ALTER TABLE tasks ADD COLUMN estimated_size INTEGER").execute(&pool).await;
+    let _ = sqlx::query("ALTER TABLE tasks ADD COLUMN estimated_size INTEGER")
+        .execute(&pool)
+        .await;
 
     Ok(pool)
 }

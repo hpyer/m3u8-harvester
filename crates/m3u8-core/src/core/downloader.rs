@@ -1,12 +1,12 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use futures_util::StreamExt;
 use reqwest::Client;
+use serde::Serialize;
 use std::path::PathBuf;
-use tokio::sync::{mpsc, Semaphore};
 use std::sync::Arc;
 use tokio::fs as tfs;
 use tokio::io::AsyncWriteExt;
-use futures_util::StreamExt;
-use serde::Serialize;
+use tokio::sync::{mpsc, Semaphore};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,16 +45,27 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    pub fn new(options: DownloadOptions, task_service: Arc<crate::services::task_service::TaskService>) -> Result<Self> {
+    pub fn new(
+        options: DownloadOptions,
+        task_service: Arc<crate::services::task_service::TaskService>,
+    ) -> Result<Self> {
         let mut builder = Client::builder().user_agent(&options.user_agent);
 
-        if let Some(proxy_url) = options.proxy.as_ref().filter(|value| !value.trim().is_empty()) {
+        if let Some(proxy_url) = options
+            .proxy
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+        {
             builder = builder.proxy(reqwest::Proxy::all(proxy_url)?);
         }
 
         let client = builder.build()?;
-        
-        Ok(Self { client, options, task_service })
+
+        Ok(Self {
+            client,
+            options,
+            task_service,
+        })
     }
 
     pub async fn start_download(
@@ -67,7 +78,7 @@ impl Downloader {
         let total = urls.len();
         let completed = Arc::new(tokio::sync::Mutex::new(0));
         let semaphore = Arc::new(Semaphore::new(self.options.concurrency));
-        
+
         // 确保目录存在
         tfs::create_dir_all(&save_path).await?;
 
@@ -79,7 +90,7 @@ impl Downloader {
                 initial_completed += 1;
             }
         }
-        
+
         {
             let mut c = completed.lock().await;
             *c = initial_completed;
@@ -87,7 +98,7 @@ impl Downloader {
 
         let mut handles = Vec::new();
         let client = self.client.clone();
-        
+
         for (index, url) in urls.into_iter().enumerate() {
             let semaphore = semaphore.clone();
             let client = client.clone();
@@ -98,10 +109,10 @@ impl Downloader {
             let task_service = self.task_service.clone();
             let retry_count = self.options.retry_count;
             let retry_delay_ms = self.options.retry_delay_ms;
-            
+
             let handle = tokio::spawn(async move {
                 let permit = semaphore.acquire_owned().await.unwrap();
-                
+
                 // 检查任务状态，如果是暂停或停止则取消下载
                 if let Ok(Some(task)) = task_service.find_task(&task_id).await {
                     if task.status == "paused" {
@@ -128,17 +139,19 @@ impl Downloader {
                             *c += 1;
                             let current_completed = *c;
                             drop(c);
-                            
+
                             let percentage = (current_completed as f64 / total as f64) * 100.0;
-                            
-                            let _ = progress_tx.send(DownloadProgress {
-                                task_id: task_id.clone(),
-                                total_segments: total,
-                                completed_segments: current_completed,
-                                percentage: (percentage * 10.0).round() / 10.0,
-                                status: "downloading".to_string(),
-                            }).await;
-                            
+
+                            let _ = progress_tx
+                                .send(DownloadProgress {
+                                    task_id: task_id.clone(),
+                                    total_segments: total,
+                                    completed_segments: current_completed,
+                                    percentage: (percentage * 10.0).round() / 10.0,
+                                    status: "downloading".to_string(),
+                                })
+                                .await;
+
                             drop(permit);
                             return Ok(());
                         }
@@ -148,7 +161,8 @@ impl Downloader {
                                 drop(permit);
                                 return Err(e);
                             }
-                            tokio::time::sleep(std::time::Duration::from_millis(retry_delay_ms)).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(retry_delay_ms))
+                                .await;
                         }
                     }
                 }
