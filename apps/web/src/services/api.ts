@@ -90,6 +90,10 @@ const parseFolderInfo = (value: unknown): FolderInfo | null => {
   const name = asString(value.name);
   if (!id || !name) return null;
 
+  const folders = Array.isArray(value.folders)
+    ? value.folders.map(parseFolderInfo).filter((item): item is FolderInfo => item !== null)
+    : [];
+
   const files = Array.isArray(value.files)
     ? value.files
         .map((file) => {
@@ -113,6 +117,7 @@ const parseFolderInfo = (value: unknown): FolderInfo | null => {
     name,
     fileCount: asNumber(value.fileCount),
     updatedAt: asString(value.updatedAt),
+    folders,
     files,
   };
 };

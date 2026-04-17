@@ -47,6 +47,7 @@ export interface FolderInfo {
   name: string;
   fileCount: number;
   updatedAt: string;
+  folders: FolderInfo[];
   files: FileInfo[];
 }
 

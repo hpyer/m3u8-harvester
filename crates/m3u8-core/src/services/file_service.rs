@@ -1,9 +1,9 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
-use serde::Serialize;
-use tokio::fs;
-use chrono::{DateTime, Utc};
 use async_recursion::async_recursion;
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use std::path::{Path, PathBuf};
+use tokio::fs;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct FileInfo {
@@ -22,6 +22,7 @@ pub struct FolderInfo {
     pub file_count: usize,
     #[serde(rename = "updatedAt")]
     pub updated_at: String,
+    pub folders: Vec<FolderInfo>,
     pub files: Vec<FileInfo>,
 }
 
@@ -40,7 +41,7 @@ impl FileService {
 
     pub async fn list_folders(&self) -> Result<Vec<FolderInfo>> {
         let mut folders = Vec::new();
-        
+
         if !fs::try_exists(&self.base_path).await? {
             return Ok(folders);
         }
@@ -52,26 +53,13 @@ impl FileService {
             let path = entry.path();
             let metadata = entry.metadata().await?;
             let name = entry.file_name().to_string_lossy().to_string();
-            
-            if name.starts_with('.') { continue; }
+
+            if name.starts_with('.') {
+                continue;
+            }
 
             if metadata.is_dir() {
-                let mut files = Vec::new();
-                self.scan_files_recursive(&path, &path, &mut files).await?;
-                
-                let modified = metadata.modified()?;
-                let latest_update = files.iter()
-                    .map(|f| f.updated_at.clone())
-                    .max()
-                    .unwrap_or_else(|| format_datetime(modified));
-
-                folders.push(FolderInfo {
-                    id: name.clone(),
-                    name,
-                    file_count: files.len(),
-                    updated_at: latest_update,
-                    files,
-                });
+                folders.push(self.build_folder_info(name.clone(), name, &path).await?);
             } else if metadata.is_file() {
                 root_files.push(FileInfo {
                     id: name.clone(),
@@ -83,7 +71,8 @@ impl FileService {
         }
 
         if !root_files.is_empty() {
-            let latest_update = root_files.iter()
+            let latest_update = root_files
+                .iter()
                 .map(|f| f.updated_at.clone())
                 .max()
                 .unwrap_or_else(|| "0000-00-00 00:00".to_string());
@@ -93,6 +82,7 @@ impl FileService {
                 name: "其他".to_string(),
                 file_count: root_files.len(),
                 updated_at: latest_update,
+                folders: Vec::new(),
                 files: root_files,
             });
         }
@@ -104,30 +94,64 @@ impl FileService {
     }
 
     #[async_recursion]
-    async fn scan_files_recursive(&self, _folder_root: &Path, current_dir: &Path, files: &mut Vec<FileInfo>) -> Result<()> {
-        let mut entries = fs::read_dir(current_dir).await?;
+    async fn build_folder_info(
+        &self,
+        relative_id: String,
+        name: String,
+        dir: &Path,
+    ) -> Result<FolderInfo> {
+        let mut entries = fs::read_dir(dir).await?;
+        let metadata = fs::metadata(dir).await?;
+        let mut folders = Vec::new();
+        let mut files = Vec::new();
+        let mut latest_update = format_datetime(metadata.modified()?);
+        let mut file_count = 0;
+
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             let metadata = entry.metadata().await?;
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') { continue; }
+            let entry_name = entry.file_name().to_string_lossy().to_string();
+            if entry_name.starts_with('.') {
+                continue;
+            }
 
             if metadata.is_dir() {
-                self.scan_files_recursive(_folder_root, &path, files).await?;
+                let child_relative_id = relative_id_path(&relative_id, &entry_name);
+                let child = self
+                    .build_folder_info(child_relative_id, entry_name, &path)
+                    .await?;
+                file_count += child.file_count;
+                latest_update = latest_update.max(child.updated_at.clone());
+                folders.push(child);
             } else if metadata.is_file() {
-                let relative_id = path.strip_prefix(&self.base_path)?
+                let relative_id = path
+                    .strip_prefix(&self.base_path)?
                     .to_string_lossy()
                     .to_string();
-                
-                files.push(FileInfo {
+
+                let file = FileInfo {
                     id: relative_id,
-                    name,
+                    name: entry_name,
                     size: format_size(metadata.len()),
                     updated_at: format_datetime(metadata.modified()?),
-                });
+                };
+                latest_update = latest_update.max(file.updated_at.clone());
+                file_count += 1;
+                files.push(file);
             }
         }
-        Ok(())
+
+        folders.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        files.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+
+        Ok(FolderInfo {
+            id: relative_id,
+            name,
+            file_count,
+            updated_at: latest_update,
+            folders,
+            files,
+        })
     }
 
     pub async fn delete_file(&self, id: &str) -> Result<()> {
@@ -193,4 +217,12 @@ fn format_size(size: u64) -> String {
 fn format_datetime(dt: std::time::SystemTime) -> String {
     let dt: DateTime<Utc> = dt.into();
     dt.format("%Y-%m-%d %H:%M").to_string()
+}
+
+fn relative_id_path(parent: &str, child: &str) -> String {
+    if parent.is_empty() {
+        child.to_string()
+    } else {
+        format!("{}/{}", parent, child)
+    }
 }
