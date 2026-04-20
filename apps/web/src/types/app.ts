@@ -65,8 +65,7 @@ export interface AppSettings {
 }
 
 export interface AppVersionInfo {
-  serverVersion: string;
-  webVersion: string;
+  appVersion: string;
   dockerImage: string;
   dockerVersion: string;
   tauriVersion: string | null;

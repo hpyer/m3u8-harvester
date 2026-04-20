@@ -156,8 +156,7 @@ const parseSettingsResponse = (value: unknown): Partial<AppSettings> => {
 const parseVersionResponse = (value: unknown): AppVersionInfo => {
   if (!isRecord(value)) {
     return {
-      serverVersion: 'unknown',
-      webVersion: 'unknown',
+      appVersion: 'unknown',
       dockerImage: 'ghcr.io/hpyer/m3u8-harvester',
       dockerVersion: '1.0.1',
       tauriVersion: null,
@@ -165,8 +164,7 @@ const parseVersionResponse = (value: unknown): AppVersionInfo => {
   }
 
   return {
-    serverVersion: asString(value.serverVersion, 'unknown'),
-    webVersion: asString(value.webVersion, 'unknown'),
+    appVersion: asString(value.appVersion, 'unknown'),
     dockerImage: asString(value.dockerImage, 'ghcr.io/hpyer/m3u8-harvester'),
     dockerVersion: asString(value.dockerVersion, '1.0.1'),
     tauriVersion: asNullableString(value.tauriVersion),

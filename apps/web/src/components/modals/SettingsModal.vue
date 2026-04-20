@@ -110,14 +110,8 @@ const save = async () => {
             <div
               class="flex items-center justify-between gap-4 rounded-lg bg-base-200/60 px-3 py-2"
             >
-              <span class="opacity-70">Server</span>
-              <span class="font-mono text-xs">v{{ versionInfo.serverVersion }}</span>
-            </div>
-            <div
-              class="flex items-center justify-between gap-4 rounded-lg bg-base-200/60 px-3 py-2"
-            >
-              <span class="opacity-70">Web</span>
-              <span class="font-mono text-xs">v{{ versionInfo.webVersion }}</span>
+              <span class="opacity-70">应用版本</span>
+              <span class="font-mono text-xs">v{{ versionInfo.appVersion }}</span>
             </div>
             <div
               class="flex items-center justify-between gap-4 rounded-lg bg-base-200/60 px-3 py-2"

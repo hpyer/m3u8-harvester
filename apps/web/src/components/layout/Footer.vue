@@ -17,10 +17,7 @@ const { versionInfo } = storeToRefs(store);
         <span class="font-bold text-xs md:text-sm">M3U8 Harvester</span>
       </div>
       <span class="badge badge-xs badge-ghost opacity-50 scale-90"
-        >Server v{{ versionInfo.serverVersion }}</span
-      >
-      <span class="badge badge-xs badge-ghost opacity-50 scale-90"
-        >Web v{{ versionInfo.webVersion }}</span
+        >v{{ versionInfo.appVersion }}</span
       >
       <span class="text-[9px] md:text-[10px] opacity-30">© 2026 All rights reserved.</span>
     </div>

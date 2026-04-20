@@ -1,6 +1,6 @@
 [package]
 name = "m3u8-server"
-version = "1.0.1"
+version.workspace = true
 edition = "2021"
 build = "build.rs"
 
