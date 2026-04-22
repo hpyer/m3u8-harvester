@@ -8,7 +8,7 @@ const store = useAppStore();
   <header class="navbar bg-base-100 shadow-sm px-2 md:px-8">
     <div class="flex-1">
       <a class="btn btn-ghost normal-case text-base md:text-xl gap-1 md:gap-2 px-2">
-        <span class="text-xl md:text-2xl">📦</span>
+        <img src="/icon.png" alt="" class="h-7 w-7 md:h-8 md:w-8 rounded-md" />
         <span class="font-bold">M3U8 Harvester</span>
       </a>
     </div>

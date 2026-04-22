@@ -26,27 +26,38 @@ pub struct FolderInfo {
     pub files: Vec<FileInfo>,
 }
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 pub struct FileService {
-    base_path: PathBuf,
+    base_path: Arc<Mutex<PathBuf>>,
 }
 
 impl FileService {
     pub fn new(base_path: PathBuf) -> Self {
-        Self { base_path }
+        Self {
+            base_path: Arc::new(Mutex::new(base_path)),
+        }
     }
 
-    pub fn get_base_path(&self) -> String {
-        self.base_path.to_string_lossy().to_string()
+    pub async fn get_base_path(&self) -> String {
+        self.base_path.lock().await.to_string_lossy().to_string()
+    }
+
+    pub async fn set_base_path(&self, new_path: PathBuf) {
+        let mut base = self.base_path.lock().await;
+        *base = new_path;
     }
 
     pub async fn list_folders(&self) -> Result<Vec<FolderInfo>> {
         let mut folders = Vec::new();
+        let base_path = self.base_path.lock().await.clone();
 
-        if !fs::try_exists(&self.base_path).await? {
+        if !fs::try_exists(&base_path).await? {
             return Ok(folders);
         }
 
-        let mut entries = fs::read_dir(&self.base_path).await?;
+        let mut entries = fs::read_dir(&base_path).await?;
         let mut root_files = Vec::new();
 
         while let Some(entry) = entries.next_entry().await? {
@@ -59,7 +70,10 @@ impl FileService {
             }
 
             if metadata.is_dir() {
-                folders.push(self.build_folder_info(name.clone(), name, &path).await?);
+                folders.push(
+                    self.build_folder_info(name.clone(), name, &path, &base_path)
+                        .await?,
+                );
             } else if metadata.is_file() {
                 root_files.push(FileInfo {
                     id: name.clone(),
@@ -94,11 +108,13 @@ impl FileService {
     }
 
     #[async_recursion]
+    #[allow(clippy::only_used_in_recursion)]
     async fn build_folder_info(
         &self,
         relative_id: String,
         name: String,
         dir: &Path,
+        base_path: &Path, // 将 base_path 作为参数传入以避免在递归中反复加锁
     ) -> Result<FolderInfo> {
         let mut entries = fs::read_dir(dir).await?;
         let metadata = fs::metadata(dir).await?;
@@ -118,16 +134,13 @@ impl FileService {
             if metadata.is_dir() {
                 let child_relative_id = relative_id_path(&relative_id, &entry_name);
                 let child = self
-                    .build_folder_info(child_relative_id, entry_name, &path)
+                    .build_folder_info(child_relative_id, entry_name, &path, base_path)
                     .await?;
                 file_count += child.file_count;
                 latest_update = latest_update.max(child.updated_at.clone());
                 folders.push(child);
             } else if metadata.is_file() {
-                let relative_id = path
-                    .strip_prefix(&self.base_path)?
-                    .to_string_lossy()
-                    .to_string();
+                let relative_id = path.strip_prefix(base_path)?.to_string_lossy().to_string();
 
                 let file = FileInfo {
                     id: relative_id,
@@ -155,8 +168,9 @@ impl FileService {
     }
 
     pub async fn delete_file(&self, id: &str) -> Result<()> {
-        let file_path = self.base_path.join(id);
-        if !file_path.starts_with(&self.base_path) {
+        let base_path = self.base_path.lock().await;
+        let file_path = base_path.join(id);
+        if !file_path.starts_with(&*base_path) {
             return Err(anyhow::anyhow!("Invalid file path"));
         }
         if fs::try_exists(&file_path).await? {
@@ -166,8 +180,9 @@ impl FileService {
     }
 
     pub async fn delete_folder(&self, id: &str) -> Result<()> {
-        let folder_path = self.base_path.join(id);
-        if !folder_path.starts_with(&self.base_path) {
+        let base_path = self.base_path.lock().await;
+        let folder_path = base_path.join(id);
+        if !folder_path.starts_with(&*base_path) {
             return Err(anyhow::anyhow!("Invalid folder path"));
         }
         if fs::try_exists(&folder_path).await? {
@@ -177,8 +192,9 @@ impl FileService {
     }
 
     pub async fn rename(&self, id: &str, new_name: &str) -> Result<()> {
-        let old_path = self.base_path.join(id);
-        if !old_path.starts_with(&self.base_path) {
+        let base_path = self.base_path.lock().await;
+        let old_path = base_path.join(id);
+        if !old_path.starts_with(&*base_path) {
             return Err(anyhow::anyhow!("Invalid old path"));
         }
 
@@ -189,7 +205,7 @@ impl FileService {
             return Err(anyhow::anyhow!("Invalid parent path"));
         };
 
-        if !new_path.starts_with(&self.base_path) {
+        if !new_path.starts_with(&*base_path) {
             return Err(anyhow::anyhow!("Invalid new path"));
         }
 

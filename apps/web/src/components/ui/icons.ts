@@ -5,6 +5,7 @@ export const ICON_NAMES = [
   'warning',
   'tasks',
   'files',
+  'folder',
   'plus',
   'play',
   'pause',

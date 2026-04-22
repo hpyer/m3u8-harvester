@@ -41,7 +41,6 @@ impl SettingService {
         if !settings.contains_key("proxy") {
             settings.insert("proxy".to_string(), "".to_string());
         }
-
         Ok(settings)
     }
 

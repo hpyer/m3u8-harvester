@@ -14,6 +14,7 @@ import CommonIcon from './components/ui/CommonIcon.vue';
 
 const store = useAppStore();
 const activeTab = ref('tasks');
+const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
 watch(activeTab, (newTab) => {
   if (newTab === 'files') {
@@ -38,7 +39,10 @@ onUnmounted(() => {});
     <Header />
 
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto p-2 md:p-8">
+    <main
+      class="flex-1 p-2 md:p-8"
+      :class="{ 'container mx-auto': !isTauri, 'w-full max-w-none': isTauri }"
+    >
       <!-- Tabs Navigation -->
       <div
         class="tabs tabs-boxed mb-3 md:mb-6 bg-base-100 p-1 flex justify-center md:justify-start shadow-sm border border-base-200"

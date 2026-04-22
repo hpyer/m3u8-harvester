@@ -322,6 +322,9 @@ export const useAppStore = defineStore('app', {
             retryDelay: String(settings.retryDelay ?? this.settings.retryDelay),
             userAgent: String(settings.userAgent ?? this.settings.userAgent),
             proxy: String(settings.proxy ?? this.settings.proxy),
+            downloadPath: settings.downloadPath
+              ? String(settings.downloadPath)
+              : this.settings.downloadPath,
           };
         }
       } catch (_e) {
@@ -337,16 +340,23 @@ export const useAppStore = defineStore('app', {
     },
     async saveSettings(newSettings: AppSettings) {
       try {
-        const payload = {
+        const payload: Record<string, string> = {
           concurrency: String(newSettings.concurrency ?? this.settings.concurrency),
           retryCount: String(newSettings.retryCount ?? this.settings.retryCount),
           retryDelay: String(newSettings.retryDelay ?? this.settings.retryDelay),
           userAgent: String(newSettings.userAgent ?? this.settings.userAgent),
           proxy: String(newSettings.proxy ?? this.settings.proxy),
         };
+
+        if (newSettings.downloadPath) {
+          payload.downloadPath = newSettings.downloadPath;
+        }
+
         await api.saveSettings(payload);
         this.settings = { ...this.settings, ...payload };
         this.isSettingsModalOpen = false;
+        // 保存设置后，如果是桌面版可能更新了下载目录，刷新一下文件列表
+        await this.fetchLocalFiles();
       } catch (_e) {
         alert('保存设置失败');
       }

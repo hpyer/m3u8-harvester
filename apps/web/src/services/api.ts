@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { invoke } from '@tauri-apps/api/core';
 import type {
   AddTaskPayload,
   AppSettings,
@@ -10,6 +11,8 @@ import type {
   TaskItem,
   TaskStatus,
 } from '../types/app';
+
+const IS_TAURI = !!(window as any).__TAURI_INTERNALS__;
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -150,6 +153,7 @@ const parseSettingsResponse = (value: unknown): Partial<AppSettings> => {
     retryDelay: asString(value.retryDelay),
     userAgent: asString(value.userAgent),
     proxy: asString(value.proxy),
+    downloadPath: asString(value.downloadPath),
   };
 };
 
@@ -180,11 +184,12 @@ export interface AppApi {
   getFiles(): Promise<FilesResponse>;
   getSettings(): Promise<Partial<AppSettings>>;
   getVersionInfo(): Promise<AppVersionInfo>;
-  saveSettings(settings: AppSettings): Promise<void>;
+  saveSettings(settings: Partial<AppSettings>): Promise<void>;
   createTask(task: AddTaskPayload): Promise<void>;
   deleteFile(id: string): Promise<void>;
   deleteFolder(id: string): Promise<void>;
   renameFileOrFolder(id: string, newName: string): Promise<void>;
+  openSelectDirectory(): Promise<string | null>;
 }
 
 const API_BASE =
@@ -228,7 +233,7 @@ class HttpAppApi implements AppApi {
     return parseVersionResponse(res.data);
   }
 
-  async saveSettings(settings: AppSettings) {
+  async saveSettings(settings: Partial<AppSettings>) {
     await axios.post(`${API_BASE}/api/settings`, settings);
   }
 
@@ -247,9 +252,76 @@ class HttpAppApi implements AppApi {
   async renameFileOrFolder(id: string, newName: string) {
     await axios.post(`${API_BASE}/api/files/${encodeURIComponent(id)}/rename`, { newName });
   }
+
+  async openSelectDirectory() {
+    return null;
+  }
 }
 
-let apiClient: AppApi = new HttpAppApi();
+class TauriAppApi implements AppApi {
+  async getTasks() {
+    const data = await invoke<unknown>('get_tasks');
+    return parseTasksResponse(data);
+  }
+
+  async respondOverwrite(taskId: string, overwrite: boolean) {
+    await invoke('respond_overwrite', { id: taskId, overwrite });
+  }
+
+  async pauseTask(id: string) {
+    await invoke('pause_task', { id });
+  }
+
+  async resumeTask(id: string) {
+    await invoke('resume_task', { id });
+  }
+
+  async deleteTask(id: string) {
+    await invoke('delete_task', { id });
+  }
+
+  async getFiles() {
+    const data = await invoke<unknown>('list_files');
+    return parseFilesResponse(data);
+  }
+
+  async getSettings() {
+    const data = await invoke<unknown>('get_settings');
+    return parseSettingsResponse(data);
+  }
+
+  async getVersionInfo() {
+    const data = await invoke<unknown>('get_app_version');
+    return parseVersionResponse(data);
+  }
+
+  async saveSettings(settings: Partial<AppSettings>) {
+    await invoke('update_settings', { settings });
+  }
+
+  async createTask(task: AddTaskPayload) {
+    await invoke('create_task', { payload: task });
+  }
+
+  async deleteFile(id: string) {
+    await invoke('delete_file', { id });
+  }
+
+  async deleteFolder(id: string) {
+    await invoke('delete_folder', { id });
+  }
+
+  async renameFileOrFolder(id: string, newName: string) {
+    await invoke('rename_file_or_folder', { id, new_name: newName });
+  }
+
+  async openSelectDirectory() {
+    const res = await invoke<string | null>('open_select_directory');
+    return res;
+  }
+}
+
+let apiClient: AppApi = IS_TAURI ? new TauriAppApi() : new HttpAppApi();
 
 export const api = {
   getTasks: () => apiClient.getTasks(),
@@ -261,11 +333,12 @@ export const api = {
   getFiles: () => apiClient.getFiles(),
   getSettings: () => apiClient.getSettings(),
   getVersionInfo: () => apiClient.getVersionInfo(),
-  saveSettings: (settings: AppSettings) => apiClient.saveSettings(settings),
+  saveSettings: (settings: Partial<AppSettings>) => apiClient.saveSettings(settings),
   createTask: (task: AddTaskPayload) => apiClient.createTask(task),
   deleteFile: (id: string) => apiClient.deleteFile(id),
   deleteFolder: (id: string) => apiClient.deleteFolder(id),
   renameFileOrFolder: (id: string, newName: string) => apiClient.renameFileOrFolder(id, newName),
+  openSelectDirectory: () => apiClient.openSelectDirectory(),
 };
 
 export const setApiClient = (client: AppApi) => {

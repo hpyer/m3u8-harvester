@@ -6,6 +6,7 @@ This repository is a monorepo for `m3u8-harvester`, a local-first M3U8 download 
 
 - Frontend: Vue 3 + TypeScript + Vite + Tailwind CSS + DaisyUI
 - Backend: Rust + Axum
+- Desktop: Tauri 2 app in `apps/desktop`, reusing the Vue frontend
 - Core domain: Rust library crate in `crates/m3u8-core`
 - Runtime dependencies: SQLite and FFmpeg
 
@@ -16,11 +17,15 @@ This file gives coding agents the minimum project-specific context needed to mak
 - `apps/server`
   - Rust HTTP server entrypoint
   - Axum handlers and server-side orchestration
-  - Download workflow glue code lives in `src/services/download_service.rs`
+  - Uses `m3u8-core` services for task, settings, file, and download workflows
+- `apps/desktop`
+  - Tauri 2 desktop app
+  - Reuses `apps/web` as its frontend
+  - Exposes local commands in `src-tauri/src/main.rs` and directly wires `m3u8-core` services
 - `crates/m3u8-core`
   - Shared domain crate
   - Database models and services
-  - File tree logic
+  - File tree and download workflow logic
   - Downloader, merger, and M3U8 parsing utilities
 - `apps/web`
   - Vue 3 SPA
@@ -41,7 +46,9 @@ This file gives coding agents the minimum project-specific context needed to mak
   - server bootstrap
 - `apps/server/src/handlers`
   - HTTP handlers for tasks, files, and settings
-- `apps/server/src/services/download_service.rs`
+- `apps/desktop/src-tauri/src/main.rs`
+  - Tauri command handlers and desktop service bootstrap
+- `crates/m3u8-core/src/services/download_service.rs`
   - task download lifecycle, segment completion handling, merge entry, output path selection
 - `crates/m3u8-core/src/services/task_service.rs`
   - task persistence and task-related domain logic
@@ -65,6 +72,7 @@ This file gives coding agents the minimum project-specific context needed to mak
 - Rust toolchain is installed.
 - Node.js `>=20` is expected.
 - `pnpm` is the package manager.
+- Tauri 2 platform dependencies are required for desktop development and packaging.
 - `ffmpeg` must be available on `PATH` for merge-related flows to work.
 
 Optional local `.env` values from the project README:
@@ -85,6 +93,7 @@ Use the root scripts unless there is a good reason not to.
 ```bash
 pnpm dev:web
 pnpm dev:server
+pnpm dev:desktop
 ```
 
 ### Build
@@ -92,6 +101,7 @@ pnpm dev:server
 ```bash
 pnpm build:web
 pnpm build:server
+pnpm build:desktop
 pnpm build
 ```
 
@@ -128,6 +138,7 @@ cargo clippy --workspace -- -D warnings
 ### 1. Keep changes in the correct layer
 
 - Put HTTP-only orchestration in `apps/server`.
+- Put desktop-only Tauri command wiring in `apps/desktop/src-tauri`.
 - Put reusable domain logic in `crates/m3u8-core`.
 - Do not move business logic into Vue components if it belongs in backend or shared Rust services.
 
@@ -171,7 +182,9 @@ Do not assume a commit will pass if local format or lint has not been run.
 
 Also inspect:
 
-- `apps/server/src/services/download_service.rs`
+- `crates/m3u8-core/src/services/download_service.rs`
+- `apps/server/src/handlers/task_handler.rs`
+- `apps/desktop/src-tauri/src/main.rs`
 - `crates/m3u8-core/src/models/task.rs`
 - `crates/m3u8-core/src/services/task_service.rs`
 - `crates/m3u8-core/src/core/downloader.rs`
@@ -187,6 +200,12 @@ If the change affects shared logic, also run:
 
 ```bash
 cargo test -p m3u8-core
+```
+
+If the change affects desktop command wiring or packaging, also run:
+
+```bash
+pnpm --filter @m3u8-harvester/desktop build
 ```
 
 ### When changing file tree or local file display
@@ -223,6 +242,7 @@ If types or payload shape changed, re-check backend endpoints too.
 - Use `pnpm`, not `npm`.
 - Prefer root scripts for routine tasks.
 - Prefer targeted validation over full rebuilds when the change scope is small.
+- The web frontend must work in both HTTP mode and Tauri mode; keep `apps/web/src/services/api.ts` aligned with both Axum endpoints and Tauri commands when API shape changes.
 - Keep responses and labels in Chinese if matching surrounding UI/content.
 - Avoid unnecessary renames or structural refactors in Rust modules unless the task requires them.
 
@@ -243,11 +263,19 @@ cargo test -p m3u8-server
 pnpm --filter @m3u8-harvester/web build
 ```
 
+### Desktop-only
+
+```bash
+cargo fmt --all
+pnpm --filter @m3u8-harvester/desktop build
+```
+
 ### Cross-layer task, file tree, or API change
 
 ```bash
 cargo fmt --all
 cargo test -p m3u8-server
+pnpm --filter @m3u8-harvester/desktop build
 pnpm --filter @m3u8-harvester/web build
 ```
 

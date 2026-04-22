@@ -7,3 +7,7 @@ target/
 *.db
 *.db-journal
 .DS_Store
+
+# Tauri generated icons. Keep only the source image in git.
+apps/desktop/src-tauri/icons/*
+!apps/desktop/src-tauri/icons/icon.png

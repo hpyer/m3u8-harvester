@@ -16,7 +16,7 @@ pub struct ListFilesResponse {
 
 pub async fn list_files(State(state): State<Arc<AppState>>) -> Json<ListFilesResponse> {
     let folders = state.file_service.list_folders().await.unwrap_or_default();
-    let download_path = state.file_service.get_base_path();
+    let download_path = state.file_service.get_base_path().await;
 
     Json(ListFilesResponse {
         folders,

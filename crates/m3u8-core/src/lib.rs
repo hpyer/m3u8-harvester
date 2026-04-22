@@ -8,6 +8,7 @@ pub use core::downloader::{DownloadOptions, DownloadProgress, Downloader};
 pub use db::init_db;
 pub use models::setting::Setting;
 pub use models::task::{Task, TaskStatus};
+pub use services::download_service::DownloadService;
 pub use services::file_service::{FileInfo, FileService, FolderInfo};
 pub use services::setting_service::SettingService;
 pub use services::task_service::{TaskService, TaskWithSubtasks};

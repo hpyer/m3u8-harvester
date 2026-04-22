@@ -1,0 +1,14 @@
+{
+  "name": "@m3u8-harvester/desktop",
+  "version": "1.0.1",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "icon": "tauri icon src-tauri/icons/icon.png -o src-tauri/icons",
+    "dev": "pnpm --workspace-root icon:web && pnpm icon && tauri dev",
+    "build": "pnpm --workspace-root icon:web && pnpm icon && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  }
+}

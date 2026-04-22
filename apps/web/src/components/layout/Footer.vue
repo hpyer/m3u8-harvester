@@ -11,15 +11,10 @@ const { versionInfo } = storeToRefs(store);
   <footer
     class="footer items-center p-2 md:p-4 bg-base-100 text-base-content border-t border-base-200 flex flex-col md:flex-row justify-between gap-2 md:gap-4"
   >
-    <div class="flex items-center gap-2 md:gap-3">
-      <div class="flex items-center gap-1.5">
-        <span class="text-base md:text-lg">📦</span>
-        <span class="font-bold text-xs md:text-sm">M3U8 Harvester</span>
-      </div>
-      <span class="badge badge-xs badge-ghost opacity-50 scale-90"
-        >v{{ versionInfo.appVersion }}</span
-      >
-      <span class="text-[9px] md:text-[10px] opacity-30">© 2026 All rights reserved.</span>
+    <div class="flex items-center gap-2 md:gap-2.5 text-[9px] md:text-[10px] opacity-30">
+      <span>M3U8 Harvester</span>
+      <span>v{{ versionInfo.appVersion }}</span>
+      <span>© 2026 All rights reserved.</span>
     </div>
 
     <div

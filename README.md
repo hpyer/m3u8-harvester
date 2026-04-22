@@ -1,6 +1,6 @@
 # M3U8 Harvester
 
-轻量级 M3U8 视频流下载合并工具，支持并发下载、实时进度监控及自动 FFmpeg 合并。
+轻量级 M3U8 视频流下载合并工具，支持 Web 服务端部署和 Tauri 桌面版，提供并发下载、实时进度监控及自动 FFmpeg 合并。
 
 ## 核心特性
 
@@ -9,12 +9,14 @@
 - ✅ **实时进度**: 自动刷新机制，实时展示下载百分比及状态变化。
 - ✅ **FFmpeg 合并**: 无损快速合并，支持用户自定义文件名。
 - ✅ **任务管理**: 完整的 CRUD，支持物理文件清理。
+- ✅ **桌面版**: 基于 Tauri 2 复用同一套 Vue UI，可直接调用本地 Rust 服务能力。
 - ✅ **单镜像部署**: 前后端合一，轻量高效。
 
 ## 技术栈
 
 - **Frontend:** Vue 3 (Composition API), TypeScript, Vite, Tailwind CSS, DaisyUI
 - **Backend:** Rust, Axum, SQLx (SQLite), Tokio (Async runtime)
+- **Desktop:** Tauri 2, Rust, shared Vue frontend
 - **Engine:** Reqwest (Download), FFmpeg (Merge)
 
 ## 快速开始 (Docker)
@@ -147,6 +149,7 @@ docker run -d \
 - **Rust**: 建议版本 v1.75+
 - **Node.js**: 建议版本 v20+ (用于前端构建)
 - **pnpm**: 用于前端依赖与根脚本管理
+- **Tauri 桌面依赖**: 如需调试或构建桌面版，请先准备对应平台的 Tauri 2 系统依赖。
 - **FFmpeg**: 确保你的电脑已安装 `ffmpeg` 并已添加到系统环境变量 (Path) 中。
   - macOS: `brew install ffmpeg`
   - Windows: [下载并配置环境变量](https://ffmpeg.org/download.html)
@@ -164,8 +167,11 @@ pnpm install
 
 - **启动后端**: `pnpm dev:server` (内部执行 `cargo run`)
 - **启动前端**: `pnpm dev:web` (内部执行 `vite`)
+- **启动桌面版**: `pnpm dev:desktop` (内部执行 `tauri dev`，并自动启动 Web 前端)
 
 访问 `http://localhost:5173` 即可进行实时调试。
+
+桌面版会复用 `apps/web` 的前端界面，但在 Tauri 环境中通过 `invoke` 直接调用本地命令，不依赖 Axum HTTP 服务。桌面应用的数据库位于系统应用数据目录，默认下载目录优先使用系统下载目录；下载设置中选择的路径会作为后续下载根目录。
 
 ### 3. 环境变量 (.env)
 
@@ -188,8 +194,9 @@ RUST_LOG=info
 
 ```text
 apps/
-  server/   # Axum 服务端，处理 HTTP 接口和下载流程编排
-  web/      # Vue 3 前端
+  server/       # Axum 服务端，处理 HTTP 接口与服务端启动编排
+  web/          # Vue 3 前端，同时服务 Web 与桌面版
+  desktop/      # Tauri 2 桌面壳，直接调用 m3u8-core 服务
 crates/
   m3u8-core/ # 核心领域逻辑、数据库服务、下载器、文件树与合并逻辑
 storage/
@@ -205,6 +212,7 @@ storage/
 ```bash
 pnpm dev:web
 pnpm dev:server
+pnpm dev:desktop
 ```
 
 构建：
@@ -212,6 +220,7 @@ pnpm dev:server
 ```bash
 pnpm build:web
 pnpm build:server
+pnpm build:desktop
 pnpm build
 ```
 

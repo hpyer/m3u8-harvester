@@ -62,6 +62,7 @@ export interface AppSettings {
   retryDelay: string;
   userAgent: string;
   proxy: string;
+  downloadPath?: string;
 }
 
 export interface AppVersionInfo {

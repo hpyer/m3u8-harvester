@@ -2,7 +2,7 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
-use m3u8_core::{init_db, FileService, SettingService, TaskService};
+use m3u8_core::{init_db, DownloadService, FileService, SettingService, TaskService};
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,9 +13,6 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod handlers;
-mod services;
-
-use services::DownloadService;
 
 pub struct AppState {
     pub task_service: Arc<TaskService>,
@@ -51,15 +48,18 @@ async fn main() {
         std::fs::canonicalize(&storage_path).unwrap_or_else(|_| storage_path.clone());
     tracing::info!("Storage directory: {}", abs_storage_path.display());
 
+    // Web/server mode is controlled by STORAGE_PATH. Desktop path selection is Tauri-only.
     let downloads_path = storage_path.join("downloads");
+
     // 确保下载目录存在
     tokio::fs::create_dir_all(&downloads_path).await.ok();
 
-    let file_service = Arc::new(FileService::new(downloads_path));
+    let file_service = Arc::new(FileService::new(downloads_path.clone()));
     let download_service = Arc::new(DownloadService::new(
         task_service.clone(),
         setting_service.clone(),
-        storage_path,
+        downloads_path,
+        false,
     ));
 
     let state = Arc::new(AppState {

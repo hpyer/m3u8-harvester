@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "apps/server",
+    "apps/desktop/src-tauri",
     "crates/m3u8-core",
 ]
 resolver = "2"
