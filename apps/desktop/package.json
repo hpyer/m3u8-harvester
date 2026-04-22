@@ -6,7 +6,7 @@
     "tauri": "tauri",
     "icon": "tauri icon src-tauri/icons/icon.png -o src-tauri/icons",
     "dev": "pnpm --workspace-root icon:web && pnpm icon && tauri dev",
-    "build": "pnpm --workspace-root icon:web && pnpm icon && tauri build"
+    "build": "tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.1.0"
