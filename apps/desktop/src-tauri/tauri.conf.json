@@ -1,6 +1,6 @@
 {
   "productName": "M3U8 Harvester",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "com.m3u8-harvester.app",
   "build": {
     "beforeDevCommand": "pnpm --filter @m3u8-harvester/web dev",

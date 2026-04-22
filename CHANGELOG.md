@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
+## [1.0.2] - 2026-04-22
+
+### Added
+
+- Added GitHub Actions workflow to build desktop installers for Windows, macOS Intel, macOS Apple Silicon, and Linux.
+- Added automatic GitHub Release publishing for version tags with normalized desktop asset names and changelog-based release notes.
+
+### Changed
+
+- Enabled Tauri bundle generation for desktop builds.
+- Stopped local desktop builds from regenerating icons unless the icon command is run explicitly.
+- Bumped server, core, desktop, web fallback, and Docker version metadata to `1.0.2`.
+
 ## [1.0.1] - 2026-04-17
 
 ### Added
