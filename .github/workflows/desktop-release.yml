@@ -139,16 +139,23 @@ jobs:
 
           version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
           mkdir -p release-assets
-          shopt -s globstar nullglob
 
-          for file in "${{ matrix.bundle-path }}"/**/*.{dmg,msi,exe,deb,rpm,AppImage}; do
-            [[ -f "$file" ]] || continue
-            case "$file" in
-              *.AppImage) ext="AppImage" ;;
-              *) ext="${file##*.}" ;;
-            esac
-            cp "$file" "release-assets/m3u8-harvester_${version}_${{ matrix.asset-suffix }}.${ext}"
-          done
+          if [[ -d "${{ matrix.bundle-path }}" ]]; then
+            find "${{ matrix.bundle-path }}" -type f \( \
+              -name '*.dmg' -o \
+              -name '*.msi' -o \
+              -name '*.exe' -o \
+              -name '*.deb' -o \
+              -name '*.rpm' -o \
+              -name '*.AppImage' \
+            \) -print0 | while IFS= read -r -d '' file; do
+              case "$file" in
+                *.AppImage) ext="AppImage" ;;
+                *) ext="${file##*.}" ;;
+              esac
+              cp "$file" "release-assets/m3u8-harvester_${version}_${{ matrix.asset-suffix }}.${ext}"
+            done
+          fi
 
           count="$(find release-assets -type f | wc -l | tr -d ' ')"
           if [[ "$count" == "0" ]]; then
