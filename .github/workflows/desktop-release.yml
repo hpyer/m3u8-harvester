@@ -4,9 +4,15 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: 'Git tag to build and publish, for example v1.0.2'
+        required: true
+        type: string
 
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: desktop-release-${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -14,32 +20,45 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
+      release_tag: ${{ steps.check.outputs.release_tag }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref }}
           fetch-depth: 0
 
       - name: Verify tag commit is on main
         id: check
         shell: bash
         run: |
-          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          release_ref="${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}"
+          release_tag="${release_ref#refs/tags/}"
+
+          if [[ "$release_tag" != v* ]]; then
+            echo "::error::Desktop release requires a v* tag, got $release_ref."
+            exit 1
+          fi
+
+          if ! git rev-parse --verify "$release_tag^{commit}" >/dev/null; then
+            echo "::error::Release tag $release_tag was not found."
+            exit 1
           fi
 
           git fetch origin main --no-tags
-          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+          release_sha="$(git rev-parse "$release_tag^{commit}")"
+
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$release_sha" origin/main; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "Tag commit $GITHUB_SHA is not on origin/main, skip desktop release."
+            echo "Tag commit $release_sha is not on origin/main, skip desktop release."
             exit 0
           fi
 
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${release_tag#v}"
           app_version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
           if [[ "$tag_version" != "$app_version" ]]; then
             echo "::error::Tag version $tag_version does not match Tauri app version $app_version."
@@ -81,6 +100,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.precheck.outputs.release_tag }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -182,6 +203,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.precheck.outputs.release_tag }}
 
       - name: Download bundle artifacts
         uses: actions/download-artifact@v4
@@ -194,7 +217,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          version="${GITHUB_REF_NAME#v}"
+          release_tag="${{ needs.precheck.outputs.release_tag }}"
+          version="${release_tag#v}"
           awk -v version="$version" '
             index($0, "## [" version "]") == 1 {
               found = 1
@@ -217,10 +241,10 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ needs.precheck.outputs.release_tag }}
+          name: ${{ needs.precheck.outputs.release_tag }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(needs.precheck.outputs.release_tag, '-') }}
           body_path: release-notes.md
           files: |
             release-assets/*
