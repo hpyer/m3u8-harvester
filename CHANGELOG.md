@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
-## [1.0.3] - 2026-05-07
+## [1.1.0] - 2026-05-07
 
 ### Added
 
@@ -14,7 +14,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 ### Changed
 
 - Updated download flow to support variant streams with separate `EXT-X-MEDIA` audio renditions and merge the selected audio/video pair into one MP4.
-- Bumped server, core, desktop, web fallback, Tauri config, and Docker version metadata to `1.0.3`.
+- Bumped server, core, desktop, web fallback, Tauri config, and Docker version metadata to `1.1.0`.
 
 ## [1.0.2] - 2026-04-22
 
