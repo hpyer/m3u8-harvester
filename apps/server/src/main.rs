@@ -44,12 +44,17 @@ async fn main() {
     let setting_service = Arc::new(SettingService::new(pool.clone()));
 
     let storage_path = PathBuf::from(env::var("STORAGE_PATH").unwrap_or_else(|_| "storage".into()));
-    let abs_storage_path =
-        std::fs::canonicalize(&storage_path).unwrap_or_else(|_| storage_path.clone());
+    let abs_storage_path = if storage_path.is_absolute() {
+        storage_path.clone()
+    } else {
+        env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(&storage_path)
+    };
     tracing::info!("Storage directory: {}", abs_storage_path.display());
 
     // Web/server mode is controlled by STORAGE_PATH. Desktop path selection is Tauri-only.
-    let downloads_path = storage_path.join("downloads");
+    let downloads_path = abs_storage_path.join("downloads");
 
     // 确保下载目录存在
     tokio::fs::create_dir_all(&downloads_path).await.ok();
