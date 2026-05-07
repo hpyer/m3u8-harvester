@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 const DEFAULT_VERSION_INFO: AppVersionInfo = {
   appVersion: 'unknown',
   dockerImage: 'ghcr.io/hpyer/m3u8-harvester',
-  dockerVersion: '1.0.2',
+  dockerVersion: '1.0.3',
   tauriVersion: null,
 };
 
