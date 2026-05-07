@@ -186,6 +186,21 @@ impl TaskService {
         Ok(())
     }
 
+    pub async fn update_task_error_message(
+        &self,
+        id: &str,
+        error_message: Option<&str>,
+    ) -> Result<()> {
+        let now = Utc::now();
+        sqlx::query("UPDATE tasks SET error_message = ?, updated_at = ? WHERE id = ?")
+            .bind(error_message)
+            .bind(now)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn update_task_progress(&self, id: &str, percentage: f64) -> Result<()> {
         let now = Utc::now();
         sqlx::query("UPDATE tasks SET percentage = ?, updated_at = ? WHERE id = ?")
@@ -284,7 +299,7 @@ impl TaskService {
     pub async fn retry_task(&self, id: &str) -> Result<()> {
         let now = Utc::now();
         sqlx::query(
-            "UPDATE tasks SET status = 'pending', percentage = 0.0, updated_at = ? WHERE id = ?",
+            "UPDATE tasks SET status = 'pending', percentage = 0.0, error_message = NULL, updated_at = ? WHERE id = ?",
         )
         .bind(now)
         .bind(id)
@@ -313,13 +328,13 @@ impl TaskService {
     pub async fn resume_task(&self, id: &str) -> Result<()> {
         let now = Utc::now();
         // 如果是父任务，恢复所有可重试的子任务
-        sqlx::query("UPDATE tasks SET status = 'pending', updated_at = ? WHERE parent_id = ? AND status IN ('paused', 'failed')")
+        sqlx::query("UPDATE tasks SET status = 'pending', error_message = NULL, updated_at = ? WHERE parent_id = ? AND status IN ('paused', 'failed')")
             .bind(now)
             .bind(id)
             .execute(&self.pool)
             .await?;
         // 子任务恢复时改为 pending；父任务状态交给汇总逻辑计算
-        sqlx::query("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ? AND status IN ('paused', 'failed')")
+        sqlx::query("UPDATE tasks SET status = 'pending', error_message = NULL, updated_at = ? WHERE id = ? AND status IN ('paused', 'failed')")
             .bind(now)
             .bind(id)
             .execute(&self.pool)
@@ -403,6 +418,7 @@ mod tests {
                 completed_segments INTEGER NOT NULL DEFAULT 0,
                 estimated_size INTEGER,
                 output_path TEXT,
+                error_message TEXT,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             );

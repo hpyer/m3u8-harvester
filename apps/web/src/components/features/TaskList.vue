@@ -37,6 +37,35 @@ const getCompletedSubtasks = (task: TaskGroup) => {
   return task.subtasks.filter((t) => ['completed', 'skipped'].includes(t.status)).length;
 };
 
+const getCurrentPlatform = () => {
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes('windows')) return 'windows';
+  if (ua.includes('mac os') || ua.includes('macintosh') || ua.includes('darwin')) return 'macos';
+  return 'linux';
+};
+
+const isMissingFfmpegError = (errorMessage: string | null | undefined) =>
+  !!errorMessage && errorMessage.toLowerCase().includes('ffmpeg executable not found');
+
+const getFfmpegInstallHint = () => {
+  const platform = getCurrentPlatform();
+  if (platform === 'windows') {
+    return '当前环境缺少 FFmpeg。Windows 可到 ffmpeg.org 下载，解压后将 ffmpeg 的 bin 目录加入 Path。';
+  }
+  if (platform === 'macos') {
+    return '当前环境缺少 FFmpeg。macOS 可执行 brew install ffmpeg 进行安装。';
+  }
+  return '当前环境缺少 FFmpeg。Linux 可执行 sudo apt install ffmpeg，或使用对应发行版的软件包管理器安装。';
+};
+
+const getTaskErrorHint = (errorMessage: string | null | undefined) => {
+  if (!errorMessage) return null;
+  if (isMissingFfmpegError(errorMessage)) {
+    return getFfmpegInstallHint();
+  }
+  return errorMessage;
+};
+
 const copyToClipboard = (text: string | null | undefined) => {
   if (!text) return;
   navigator.clipboard
@@ -192,81 +221,89 @@ const copyToClipboard = (text: string | null | undefined) => {
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="sub in task.subtasks"
-                  :key="sub.id"
-                  class="hover:bg-base-200/30 border-b border-base-200 last:border-0"
-                >
-                  <td class="pl-6">
-                    <div class="flex items-center gap-2 py-2">
-                      <span class="text-xs">📄</span>
-                      <span class="truncate max-w-xs font-medium" :title="sub.title">{{
-                        sub.title
-                      }}</span>
-                      <span
-                        :class="[
-                          'badge badge-sm badge-outline font-semibold py-1.5 px-2 scale-90',
-                          getStatusBadgeClass(sub.status),
-                        ]"
-                      >
-                        {{ getStatusLabel(sub.status) }}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="flex flex-col py-2">
-                      <div class="flex justify-between items-end mb-0.5 px-0.5">
-                        <span class="text-[9px] opacity-40 font-mono uppercase tracking-tighter"
-                          >{{ sub.completedSegments }} / {{ sub.totalSegments }}</span
+                <template v-for="sub in task.subtasks" :key="sub.id">
+                  <tr class="hover:bg-base-200/30 border-b border-base-200 last:border-0">
+                    <td class="pl-6">
+                      <div class="flex items-center gap-2 py-2">
+                        <span class="text-xs">📄</span>
+                        <span class="truncate max-w-xs font-medium" :title="sub.title">{{
+                          sub.title
+                        }}</span>
+                        <span
+                          :class="[
+                            'badge badge-sm badge-outline font-semibold py-1.5 px-2 scale-90',
+                            getStatusBadgeClass(sub.status),
+                          ]"
                         >
-                        <span class="text-[10px] font-mono font-bold text-primary"
-                          >{{ formatPercentage(sub.percentage) }}%</span
-                        >
+                          {{ getStatusLabel(sub.status) }}
+                        </span>
                       </div>
-                      <progress
-                        class="progress progress-primary w-full h-1 shadow-inner bg-base-300"
-                        :value="sub.percentage"
-                        max="100"
-                      ></progress>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="text-[11px] font-mono opacity-60">
-                      {{ formatSize(sub.estimatedSize) }}
-                    </div>
-                  </td>
-                  <td class="text-center">
-                    <div class="flex justify-center gap-1">
-                      <button
-                        class="btn btn-ghost btn-xs text-info"
-                        title="复制下载链接"
-                        @click="copyToClipboard(sub.m3u8Url)"
-                      >
-                        <CommonIcon name="copy" class-name="h-4 w-4" />
-                      </button>
-                      <button
-                        v-if="isResumableStatus(sub.status)"
-                        class="btn btn-ghost btn-xs text-success"
-                        @click="store.resumeTask(sub.id)"
-                      >
-                        <CommonIcon name="play" class-name="h-4 w-4" />
-                      </button>
-                      <button
-                        v-else-if="isPausableSubtaskStatus(sub.status)"
-                        class="btn btn-ghost btn-xs text-warning"
-                        @click="store.pauseTask(sub.id)"
-                      >
-                        <CommonIcon name="pause" class-name="h-4 w-4" />
-                      </button>
-                      <button
-                        class="btn btn-ghost btn-xs text-error"
-                        @click="store.deleteTask(sub.id)"
-                      >
-                        <CommonIcon name="trash" class-name="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td>
+                      <div class="flex flex-col py-2">
+                        <div class="flex justify-between items-end mb-0.5 px-0.5">
+                          <span class="text-[9px] opacity-40 font-mono uppercase tracking-tighter"
+                            >{{ sub.completedSegments }} / {{ sub.totalSegments }}</span
+                          >
+                          <span class="text-[10px] font-mono font-bold text-primary"
+                            >{{ formatPercentage(sub.percentage) }}%</span
+                          >
+                        </div>
+                        <progress
+                          class="progress progress-primary w-full h-1 shadow-inner bg-base-300"
+                          :value="sub.percentage"
+                          max="100"
+                        ></progress>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="text-[11px] font-mono opacity-60">
+                        {{ formatSize(sub.estimatedSize) }}
+                      </div>
+                    </td>
+                    <td class="text-center">
+                      <div class="flex justify-center gap-1">
+                        <button
+                          class="btn btn-ghost btn-xs text-info"
+                          title="复制下载链接"
+                          @click="copyToClipboard(sub.m3u8Url)"
+                        >
+                          <CommonIcon name="copy" class-name="h-4 w-4" />
+                        </button>
+                        <button
+                          v-if="isResumableStatus(sub.status)"
+                          class="btn btn-ghost btn-xs text-success"
+                          @click="store.resumeTask(sub.id)"
+                        >
+                          <CommonIcon name="play" class-name="h-4 w-4" />
+                        </button>
+                        <button
+                          v-else-if="isPausableSubtaskStatus(sub.status)"
+                          class="btn btn-ghost btn-xs text-warning"
+                          @click="store.pauseTask(sub.id)"
+                        >
+                          <CommonIcon name="pause" class-name="h-4 w-4" />
+                        </button>
+                        <button
+                          class="btn btn-ghost btn-xs text-error"
+                          @click="store.deleteTask(sub.id)"
+                        >
+                          <CommonIcon name="trash" class-name="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="sub.status === 'failed' && getTaskErrorHint(sub.errorMessage)"
+                    class="border-b border-base-200 last:border-0"
+                  >
+                    <td colspan="4" class="pl-6 pr-4 pb-3 pt-0">
+                      <div class="alert alert-warning min-h-0 py-2 text-xs leading-5">
+                        <span>{{ getTaskErrorHint(sub.errorMessage) }}</span>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
@@ -344,6 +381,13 @@ const copyToClipboard = (text: string | null | undefined) => {
                   </button>
                 </div>
               </div>
+
+              <div
+                v-if="sub.status === 'failed' && getTaskErrorHint(sub.errorMessage)"
+                class="alert alert-warning mt-1 min-h-0 px-3 py-2 text-xs leading-5"
+              >
+                <span>{{ getTaskErrorHint(sub.errorMessage) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -351,5 +395,3 @@ const copyToClipboard = (text: string | null | undefined) => {
     </div>
   </div>
 </template>
-emplate>
-late>

@@ -61,6 +61,7 @@ pub async fn init_db(database_url: &str) -> Result<SqlitePool> {
             completed_segments INTEGER NOT NULL DEFAULT 0,
             estimated_size INTEGER,
             output_path TEXT,
+            error_message TEXT,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -76,6 +77,9 @@ pub async fn init_db(database_url: &str) -> Result<SqlitePool> {
 
     // 尝试添加 missing columns (简单的迁移逻辑)
     let _ = sqlx::query("ALTER TABLE tasks ADD COLUMN estimated_size INTEGER")
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE tasks ADD COLUMN error_message TEXT")
         .execute(&pool)
         .await;
 

@@ -27,6 +27,7 @@ export interface TaskItem {
   completedSegments: number;
   estimatedSize: number | null;
   outputPath: string | null;
+  errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
 }

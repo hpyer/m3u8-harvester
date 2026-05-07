@@ -71,6 +71,7 @@ const parseTaskItem = (value: unknown): TaskItem | null => {
     completedSegments: asNumber(value.completedSegments),
     estimatedSize: asNullableNumber(value.estimatedSize),
     outputPath: asNullableString(value.outputPath),
+    errorMessage: asNullableString(value.errorMessage),
     createdAt: asString(value.createdAt),
     updatedAt: asString(value.updatedAt),
   };

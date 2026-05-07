@@ -33,6 +33,7 @@ pub struct Task {
     pub completed_segments: i32,
     pub estimated_size: Option<i64>,
     pub output_path: Option<String>,
+    pub error_message: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
