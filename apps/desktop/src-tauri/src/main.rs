@@ -202,7 +202,7 @@ async fn create_task(
 #[tauri::command]
 async fn delete_task(state: State<'_, Arc<AppState>>, id: String) -> Result<(), String> {
     state
-        .task_service
+        .download_service
         .delete_task(&id)
         .await
         .map_err(|e| e.to_string())

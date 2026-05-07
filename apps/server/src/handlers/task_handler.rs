@@ -179,7 +179,7 @@ pub async fn delete_task(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    state.task_service.delete_task(&id).await.ok();
+    state.download_service.delete_task(&id).await.ok();
     Json(serde_json::json!({ "success": true }))
 }
 

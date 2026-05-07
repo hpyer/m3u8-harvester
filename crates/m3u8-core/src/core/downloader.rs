@@ -128,10 +128,17 @@ impl Downloader {
                 let permit = semaphore.acquire_owned().await.unwrap();
 
                 // 检查任务状态，如果是暂停或停止则取消下载
-                if let Ok(Some(task)) = task_service.find_task(&task_id).await {
-                    if task.status == "paused" {
-                        drop(permit);
-                        return Ok(());
+                if let Ok(task) = task_service.find_task(&task_id).await {
+                    match task {
+                        Some(task) if task.status == "paused" => {
+                            drop(permit);
+                            return Ok(());
+                        }
+                        None => {
+                            drop(permit);
+                            return Ok(());
+                        }
+                        _ => {}
                     }
                 }
 

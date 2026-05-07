@@ -110,6 +110,44 @@ impl DownloadService {
         });
     }
 
+    pub async fn delete_task(&self, task_id: &str) -> anyhow::Result<()> {
+        self.task_service.pause_task(task_id).await?;
+
+        let mut task_ids = vec![task_id.to_string()];
+        task_ids.extend(
+            self.task_service
+                .find_subtasks(task_id)
+                .await?
+                .into_iter()
+                .map(|task| task.id),
+        );
+
+        {
+            let mut overwrite_waiters = self.overwrite_waiters.lock().await;
+            for id in &task_ids {
+                overwrite_waiters.remove(id);
+            }
+        }
+
+        {
+            let mut active_tasks = self.active_tasks.lock().await;
+            for id in &task_ids {
+                active_tasks.remove(id);
+            }
+        }
+
+        let download_root = self.resolve_download_root().await?;
+        let temp_root = download_root.join(".temp");
+        for id in &task_ids {
+            let temp_dir = temp_root.join(id);
+            if tokio::fs::metadata(&temp_dir).await.is_ok() {
+                let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+            }
+        }
+
+        self.task_service.delete_task(task_id).await
+    }
+
     pub async fn handle_overwrite_response(
         &self,
         task_id: String,
@@ -166,18 +204,11 @@ impl DownloadService {
 
         let m3u8_url = task.m3u8_url.clone().unwrap();
         let settings = setting_service.get_all().await?;
-
-        // The configured download path must match the file browser root.
-        // If no explicit setting exists, use the app-specific startup default.
-        let download_root = if use_configured_download_path {
-            settings
-                .get("downloadPath")
-                .filter(|path| !path.trim().is_empty())
-                .map(PathBuf::from)
-                .unwrap_or(default_download_path)
-        } else {
-            default_download_path
-        };
+        let download_root = Self::resolve_download_root_from_settings(
+            &settings,
+            default_download_path,
+            use_configured_download_path,
+        );
 
         let output_file = Self::build_output_path(&download_root, &task_service, &task).await?;
         task_service
@@ -337,6 +368,31 @@ impl DownloadService {
 
         info!("Task {} completed successfully", task_id);
         Ok(())
+    }
+
+    async fn resolve_download_root(&self) -> anyhow::Result<PathBuf> {
+        let settings = self.setting_service.get_all().await?;
+        Ok(Self::resolve_download_root_from_settings(
+            &settings,
+            self.default_download_path.clone(),
+            self.use_configured_download_path,
+        ))
+    }
+
+    fn resolve_download_root_from_settings(
+        settings: &HashMap<String, String>,
+        default_download_path: PathBuf,
+        use_configured_download_path: bool,
+    ) -> PathBuf {
+        if use_configured_download_path {
+            settings
+                .get("downloadPath")
+                .filter(|path| !path.trim().is_empty())
+                .map(PathBuf::from)
+                .unwrap_or(default_download_path)
+        } else {
+            default_download_path
+        }
     }
 
     async fn build_output_path(
