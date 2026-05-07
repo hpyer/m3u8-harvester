@@ -4,4 +4,6 @@
 
 body {
   @apply bg-base-200 min-h-screen;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }

@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
-use m3u8_rs::{KeyMethod, Playlist};
+use m3u8_rs::{AlternativeMediaType, KeyMethod, Playlist};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use url::Url;
 
@@ -9,6 +10,77 @@ pub struct M3U8Info {
     pub segments: Vec<SegmentInfo>,
     pub base_url: String,
     pub total_size: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DownloadSource {
+    pub video: M3U8Info,
+    pub audio: Option<M3U8Info>,
+}
+
+impl DownloadSource {
+    pub fn total_segments(&self) -> usize {
+        self.video.segments.len()
+            + self
+                .audio
+                .as_ref()
+                .map(|audio| audio.segments.len())
+                .unwrap_or(0)
+    }
+
+    pub fn total_size(&self) -> Option<u64> {
+        match (
+            self.video.total_size,
+            self.audio.as_ref().and_then(|audio| audio.total_size),
+        ) {
+            (Some(video), Some(audio)) => Some(video + audio),
+            (Some(video), None) => Some(video),
+            (None, Some(audio)) => Some(audio),
+            (None, None) => None,
+        }
+    }
+
+    pub fn all_segments(&self) -> Vec<SegmentInfo> {
+        let mut segments = self.video.segments.clone();
+        if let Some(audio) = &self.audio {
+            segments.extend(audio.segments.clone());
+        }
+        segments
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct M3U8VariantOption {
+    pub video_url: String,
+    pub audio_url: Option<String>,
+    pub resolution: Option<String>,
+    pub bandwidth: u64,
+    pub average_bandwidth: Option<u64>,
+    pub codecs: Option<String>,
+    pub audio_name: Option<String>,
+    pub has_separate_audio: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct M3U8ProbeResult {
+    pub is_master: bool,
+    pub default_variant_index: Option<usize>,
+    pub variants: Vec<M3U8VariantOption>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct M3U8StreamSelection {
+    pub original_url: String,
+    pub video_url: String,
+    pub audio_url: Option<String>,
+    pub resolution: Option<String>,
+    pub bandwidth: u64,
+    pub average_bandwidth: Option<u64>,
+    pub codecs: Option<String>,
+    pub audio_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,10 +106,118 @@ pub struct InitMapInfo {
 }
 
 pub async fn parse_m3u8(m3u8_url: &str) -> Result<M3U8Info> {
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()?;
+    let client = build_client()?;
+    parse_media_playlist_with_client(&client, m3u8_url).await
+}
 
+pub async fn probe_m3u8(m3u8_url: &str) -> Result<M3U8ProbeResult> {
+    let client = build_client()?;
+    let response = client.get(m3u8_url).send().await?.text().await?;
+
+    match m3u8_rs::parse_playlist_res(response.as_bytes()) {
+        Ok(Playlist::MediaPlaylist(_)) => Ok(M3U8ProbeResult {
+            is_master: false,
+            default_variant_index: None,
+            variants: Vec::new(),
+        }),
+        Ok(Playlist::MasterPlaylist(playlist)) => {
+            let base_url = Url::parse(m3u8_url)?;
+            let mut variants = Vec::new();
+
+            for variant in playlist.variants {
+                if variant.is_i_frame {
+                    continue;
+                }
+
+                let video_url = base_url.join(&variant.uri)?.to_string();
+                let audio_rendition = variant.audio.as_ref().and_then(|group_id| {
+                    playlist
+                        .alternatives
+                        .iter()
+                        .filter(|media| {
+                            media.media_type == AlternativeMediaType::Audio
+                                && media.group_id == *group_id
+                                && media.uri.is_some()
+                        })
+                        .max_by_key(|media| {
+                            let default_score = if media.default {
+                                2
+                            } else if media.autoselect {
+                                1
+                            } else {
+                                0
+                            };
+                            (default_score, media.name.clone())
+                        })
+                });
+
+                let audio_url = audio_rendition
+                    .and_then(|media| media.uri.as_deref())
+                    .map(|uri| base_url.join(uri))
+                    .transpose()?
+                    .map(|url| url.to_string());
+
+                variants.push(M3U8VariantOption {
+                    video_url,
+                    audio_url,
+                    resolution: variant
+                        .resolution
+                        .as_ref()
+                        .map(|resolution| format!("{}x{}", resolution.width, resolution.height)),
+                    bandwidth: variant.bandwidth,
+                    average_bandwidth: variant.average_bandwidth,
+                    codecs: variant.codecs.clone(),
+                    audio_name: audio_rendition.map(|media| media.name.clone()),
+                    has_separate_audio: audio_rendition.is_some(),
+                });
+            }
+
+            let default_variant_index = variants
+                .iter()
+                .enumerate()
+                .max_by_key(|(_, variant)| variant_priority(variant))
+                .map(|(index, _)| index);
+
+            Ok(M3U8ProbeResult {
+                is_master: true,
+                default_variant_index,
+                variants,
+            })
+        }
+        _ => Err(anyhow!("无法解析该 M3U8 文件")),
+    }
+}
+
+pub async fn parse_download_source(input: &str) -> Result<DownloadSource> {
+    let client = build_client()?;
+
+    if let Ok(selection) = serde_json::from_str::<M3U8StreamSelection>(input) {
+        let video = prefix_m3u8_info(
+            parse_media_playlist_with_client(&client, &selection.video_url).await?,
+            "video",
+        );
+        let audio = match selection.audio_url.as_deref() {
+            Some(audio_url) => Some(prefix_m3u8_info(
+                parse_media_playlist_with_client(&client, audio_url).await?,
+                "audio",
+            )),
+            None => None,
+        };
+
+        return Ok(DownloadSource { video, audio });
+    }
+
+    let video = parse_media_playlist_with_client(&client, input).await?;
+    Ok(DownloadSource { video, audio: None })
+}
+
+fn build_client() -> Result<Client> {
+    Ok(Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?)
+}
+
+async fn parse_media_playlist_with_client(client: &Client, m3u8_url: &str) -> Result<M3U8Info> {
     let response = client.get(m3u8_url).send().await?.text().await?;
 
     match m3u8_rs::parse_playlist_res(response.as_bytes()) {
@@ -88,10 +268,35 @@ pub async fn parse_m3u8(m3u8_url: &str) -> Result<M3U8Info> {
             })
         }
         Ok(Playlist::MasterPlaylist(_)) => Err(anyhow!(
-            "目前暂不支持解析 Master Playlist，请提供具体的 Media Playlist URL"
+            "目前暂不支持直接下载 Master Playlist，请先选择具体清晰度"
         )),
         _ => Err(anyhow!("无法解析该 M3U8 文件")),
     }
+}
+
+fn prefix_m3u8_info(mut info: M3U8Info, prefix: &str) -> M3U8Info {
+    for segment in &mut info.segments {
+        segment.file_name = format!("{prefix}/{}", segment.file_name);
+        if let Some(init_map) = &mut segment.init_map {
+            init_map.file_name = format!("{prefix}/{}", init_map.file_name);
+        }
+    }
+    info
+}
+
+fn variant_priority(variant: &M3U8VariantOption) -> (u64, u64, u64) {
+    let resolution_score = variant
+        .resolution
+        .as_deref()
+        .and_then(|value| value.split_once('x'))
+        .and_then(|(w, h)| Some((w.parse::<u64>().ok()?, h.parse::<u64>().ok()?)))
+        .map(|(w, h)| w * h)
+        .unwrap_or(0);
+    (
+        resolution_score,
+        variant.average_bandwidth.unwrap_or(0),
+        variant.bandwidth,
+    )
 }
 
 fn normalize_key(base_url: &Url, key: &m3u8_rs::Key) -> Result<Option<EncryptionKey>> {

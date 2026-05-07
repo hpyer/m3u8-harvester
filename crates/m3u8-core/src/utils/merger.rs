@@ -11,7 +11,8 @@ impl VideoMerger {
     pub async fn merge(
         temp_dir: &Path,
         output_file: &Path,
-        segments: &[SegmentInfo],
+        video_segments: &[SegmentInfo],
+        audio_segments: Option<&[SegmentInfo]>,
     ) -> Result<()> {
         info!("Merging segments in {:?} to {:?}", temp_dir, output_file);
         let ffmpeg_path = resolve_ffmpeg_path()?;
@@ -23,35 +24,55 @@ impl VideoMerger {
                 .with_context(|| format!("Failed to create output directory: {:?}", parent))?;
         }
 
-        if segments.is_empty() {
+        if video_segments.is_empty() {
             return Err(anyhow!("没有可合并的分片"));
         }
 
-        let playlist_path = temp_dir.join("local_playlist.m3u8");
-        let playlist_content = build_local_playlist(segments);
-        tfs::write(&playlist_path, playlist_content)
+        let video_playlist_path = temp_dir.join("video_playlist.m3u8");
+        let video_playlist_content = build_local_playlist(video_segments);
+        tfs::write(&video_playlist_path, video_playlist_content)
             .await
-            .with_context(|| format!("Failed to write local playlist: {:?}", playlist_path))?;
+            .with_context(|| {
+                format!("Failed to write local playlist: {:?}", video_playlist_path)
+            })?;
 
-        // 调用 ffmpeg 合并
-        let output = tokio::process::Command::new(&ffmpeg_path)
+        let mut command = tokio::process::Command::new(&ffmpeg_path);
+        command
             .current_dir(temp_dir)
             .arg("-y")
             .arg("-allowed_extensions")
             .arg("ALL")
             .arg("-i")
-            .arg("local_playlist.m3u8")
-            .arg("-c")
-            .arg("copy")
-            .arg(output_file)
-            .output()
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to start ffmpeg {:?} in {:?} for output {:?}",
-                    ffmpeg_path, temp_dir, output_file
-                )
-            })?;
+            .arg("video_playlist.m3u8");
+
+        if let Some(audio_segments) = audio_segments.filter(|segments| !segments.is_empty()) {
+            let audio_playlist_path = temp_dir.join("audio_playlist.m3u8");
+            let audio_playlist_content = build_local_playlist(audio_segments);
+            tfs::write(&audio_playlist_path, audio_playlist_content)
+                .await
+                .with_context(|| {
+                    format!("Failed to write local playlist: {:?}", audio_playlist_path)
+                })?;
+
+            command
+                .arg("-allowed_extensions")
+                .arg("ALL")
+                .arg("-i")
+                .arg("audio_playlist.m3u8")
+                .arg("-map")
+                .arg("0:v:0")
+                .arg("-map")
+                .arg("1:a:0");
+        }
+
+        command.arg("-c").arg("copy").arg(output_file);
+
+        let output = command.output().await.with_context(|| {
+            format!(
+                "Failed to start ffmpeg {:?} in {:?} for output {:?}",
+                ffmpeg_path, temp_dir, output_file
+            )
+        })?;
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);

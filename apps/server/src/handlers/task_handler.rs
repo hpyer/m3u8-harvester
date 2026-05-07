@@ -5,10 +5,10 @@ use axum::{
     Json,
 };
 use lazy_static::lazy_static;
-use m3u8_core::{Task, TaskWithSubtasks};
+use m3u8_core::{probe_m3u8, M3U8ProbeResult, M3U8StreamSelection, Task, TaskWithSubtasks};
 use regex::Regex;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 lazy_static! {
     static ref RE_YEAR: Regex = Regex::new(r"\d{4}").unwrap();
@@ -43,11 +43,27 @@ pub struct CreateTaskRequest {
     pub season: Option<String>,
     #[serde(rename = "rawSubtasks")]
     pub raw_subtasks: String,
+    #[serde(default, rename = "streamSelections")]
+    pub stream_selections: HashMap<String, M3U8StreamSelection>,
+}
+
+#[derive(Deserialize)]
+pub struct ProbeM3U8Request {
+    pub url: String,
 }
 
 #[derive(Deserialize)]
 pub struct OverwriteResponse {
     pub overwrite: bool,
+}
+
+pub async fn probe_task_m3u8(
+    Json(payload): Json<ProbeM3U8Request>,
+) -> Result<Json<M3U8ProbeResult>, (StatusCode, String)> {
+    probe_m3u8(&payload.url)
+        .await
+        .map(Json)
+        .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()))
 }
 
 pub async fn create_task(
@@ -92,6 +108,13 @@ pub async fn create_task(
 
         let url = parts[0];
         let sub_title_raw = parts[1..].join(" ");
+        let task_source = payload
+            .stream_selections
+            .get(&index.to_string())
+            .map(serde_json::to_string)
+            .transpose()
+            .expect("Failed to serialize selected stream")
+            .unwrap_or_else(|| url.to_string());
 
         let final_sub_title = if payload.category == "series" {
             let mut season_str = final_season
@@ -162,7 +185,7 @@ pub async fn create_task(
             .create_sub_task(
                 parent_task.id.clone(),
                 final_sub_title,
-                url.to_string(),
+                task_source,
                 payload.category.clone(),
             )
             .await

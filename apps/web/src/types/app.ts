@@ -79,9 +79,47 @@ export interface AddTaskPayload {
   year: string;
   season: string;
   rawSubtasks: string;
+  streamSelections?: Record<string, M3U8StreamSelection>;
 }
 
 export interface ConfirmationItem {
   taskId: string;
   fileName: string;
+}
+
+export interface M3U8VariantOption {
+  videoUrl: string;
+  audioUrl: string | null;
+  resolution: string | null;
+  bandwidth: number;
+  averageBandwidth: number | null;
+  codecs: string | null;
+  audioName: string | null;
+  hasSeparateAudio: boolean;
+}
+
+export interface M3U8ProbeResult {
+  isMaster: boolean;
+  defaultVariantIndex: number | null;
+  variants: M3U8VariantOption[];
+}
+
+export interface M3U8StreamSelection {
+  originalUrl: string;
+  videoUrl: string;
+  audioUrl: string | null;
+  resolution: string | null;
+  bandwidth: number;
+  averageBandwidth: number | null;
+  codecs: string | null;
+  audioName: string | null;
+}
+
+export interface VariantSelectionItem {
+  lineIndex: number;
+  rawLine: string;
+  url: string;
+  title: string;
+  selectedIndex: number;
+  probe: M3U8ProbeResult;
 }

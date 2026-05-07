@@ -2,10 +2,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use m3u8_core::{
-    init_db, DownloadService, FileService, SettingService, Task, TaskService, TaskWithSubtasks,
+    init_db, probe_m3u8, DownloadService, FileService, M3U8ProbeResult, M3U8StreamSelection,
+    SettingService, Task, TaskService, TaskWithSubtasks,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -53,6 +55,13 @@ pub struct CreateTaskRequest {
     pub season: Option<String>,
     #[serde(rename = "rawSubtasks")]
     pub raw_subtasks: String,
+    #[serde(default, rename = "streamSelections")]
+    pub stream_selections: HashMap<String, M3U8StreamSelection>,
+}
+
+#[derive(Deserialize)]
+pub struct ProbeM3U8Request {
+    pub url: String,
 }
 
 #[tauri::command]
@@ -117,6 +126,13 @@ async fn create_task(
 
         let url = parts[0];
         let sub_title_raw = parts[1..].join(" ");
+        let task_source = payload
+            .stream_selections
+            .get(&index.to_string())
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| url.to_string());
 
         let final_sub_title = if payload.category == "series" {
             let mut season_str = final_season
@@ -187,7 +203,7 @@ async fn create_task(
             .create_sub_task(
                 parent_task.id.clone(),
                 final_sub_title,
-                url.to_string(),
+                task_source,
                 payload.category.clone(),
             )
             .await
@@ -197,6 +213,11 @@ async fn create_task(
     }
 
     Ok(parent_task)
+}
+
+#[tauri::command]
+async fn probe_task_m3u8(payload: ProbeM3U8Request) -> Result<M3U8ProbeResult, String> {
+    probe_m3u8(&payload.url).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -446,6 +467,7 @@ fn main() {
             get_tasks,
             get_task,
             create_task,
+            probe_task_m3u8,
             delete_task,
             delete_completed_tasks,
             retry_task,

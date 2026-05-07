@@ -210,6 +210,9 @@ impl Downloader {
         tmp_path: &PathBuf,
         file_path: &PathBuf,
     ) -> Result<()> {
+        if let Some(parent) = tmp_path.parent() {
+            tfs::create_dir_all(parent).await?;
+        }
         let mut data = Self::download_bytes(client, &segment.url).await?;
 
         if let Some(key) = segment.key.as_ref() {
@@ -242,6 +245,9 @@ impl Downloader {
                 continue;
             }
 
+            if let Some(parent) = file_path.parent() {
+                tfs::create_dir_all(parent).await?;
+            }
             let data = Self::download_bytes(&self.client, &init_map.url).await?;
             let tmp_path = save_path.join(format!("{}.tmp", init_map.file_name));
             let mut file = tfs::File::create(&tmp_path).await?;

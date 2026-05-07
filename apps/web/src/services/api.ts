@@ -6,6 +6,7 @@ import type {
   AppVersionInfo,
   FilesResponse,
   FolderInfo,
+  M3U8ProbeResult,
   TaskCategory,
   TaskGroup,
   TaskItem,
@@ -176,6 +177,37 @@ const parseVersionResponse = (value: unknown): AppVersionInfo => {
   };
 };
 
+const parseM3U8ProbeResult = (value: unknown): M3U8ProbeResult => {
+  if (!isRecord(value)) {
+    return { isMaster: false, defaultVariantIndex: null, variants: [] };
+  }
+
+  const variants = Array.isArray(value.variants)
+    ? value.variants
+        .map((variant) => {
+          if (!isRecord(variant)) return null;
+          return {
+            videoUrl: asString(variant.videoUrl),
+            audioUrl: asNullableString(variant.audioUrl),
+            resolution: asNullableString(variant.resolution),
+            bandwidth: asNumber(variant.bandwidth),
+            averageBandwidth: asNullableNumber(variant.averageBandwidth),
+            codecs: asNullableString(variant.codecs),
+            audioName: asNullableString(variant.audioName),
+            hasSeparateAudio: asBoolean(variant.hasSeparateAudio),
+          };
+        })
+        .filter((variant): variant is M3U8ProbeResult['variants'][number] => variant !== null)
+    : [];
+
+  return {
+    isMaster: asBoolean(value.isMaster),
+    defaultVariantIndex:
+      typeof value.defaultVariantIndex === 'number' ? value.defaultVariantIndex : null,
+    variants,
+  };
+};
+
 export interface AppApi {
   getTasks(): Promise<TaskGroup[]>;
   respondOverwrite(taskId: string, overwrite: boolean): Promise<void>;
@@ -187,6 +219,7 @@ export interface AppApi {
   getVersionInfo(): Promise<AppVersionInfo>;
   saveSettings(settings: Partial<AppSettings>): Promise<void>;
   createTask(task: AddTaskPayload): Promise<void>;
+  probeM3U8(url: string): Promise<M3U8ProbeResult>;
   deleteFile(id: string): Promise<void>;
   deleteFolder(id: string): Promise<void>;
   renameFileOrFolder(id: string, newName: string): Promise<void>;
@@ -240,6 +273,11 @@ class HttpAppApi implements AppApi {
 
   async createTask(task: AddTaskPayload) {
     await axios.post(`${API_BASE}/api/tasks`, task);
+  }
+
+  async probeM3U8(url: string) {
+    const res = await axios.post<unknown>(`${API_BASE}/api/tasks/probe`, { url });
+    return parseM3U8ProbeResult(res.data);
   }
 
   async deleteFile(id: string) {
@@ -304,6 +342,11 @@ class TauriAppApi implements AppApi {
     await invoke('create_task', { payload: task });
   }
 
+  async probeM3U8(url: string) {
+    const data = await invoke<unknown>('probe_task_m3u8', { payload: { url } });
+    return parseM3U8ProbeResult(data);
+  }
+
   async deleteFile(id: string) {
     await invoke('delete_file', { id });
   }
@@ -336,6 +379,7 @@ export const api = {
   getVersionInfo: () => apiClient.getVersionInfo(),
   saveSettings: (settings: Partial<AppSettings>) => apiClient.saveSettings(settings),
   createTask: (task: AddTaskPayload) => apiClient.createTask(task),
+  probeM3U8: (url: string) => apiClient.probeM3U8(url),
   deleteFile: (id: string) => apiClient.deleteFile(id),
   deleteFolder: (id: string) => apiClient.deleteFolder(id),
   renameFileOrFolder: (id: string, newName: string) => apiClient.renameFileOrFolder(id, newName),

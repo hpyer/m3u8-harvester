@@ -87,6 +87,10 @@ async fn main() {
                 .delete(handlers::task_handler::delete_completed_tasks),
         )
         .route(
+            "/api/tasks/probe",
+            post(handlers::task_handler::probe_task_m3u8),
+        )
+        .route(
             "/api/tasks/:id",
             get(handlers::task_handler::get_task).delete(handlers::task_handler::delete_task),
         )

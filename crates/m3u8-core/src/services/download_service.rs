@@ -1,7 +1,7 @@
 use crate::core::downloader::{DownloadOptions, DownloadProgress, Downloader};
 use crate::services::setting_service::SettingService;
 use crate::services::task_service::TaskService;
-use crate::utils::m3u8::parse_m3u8;
+use crate::utils::m3u8::parse_download_source;
 use crate::utils::merger::VideoMerger;
 use regex::Regex;
 use std::sync::OnceLock;
@@ -250,13 +250,13 @@ impl DownloadService {
         // 1. 解析 M3U8
         // ... (parsing logic remains same)
         task_service.update_task_status(&task_id, "parsing").await?;
-        let m3u8_info = parse_m3u8(&m3u8_url).await?;
+        let download_source = parse_download_source(&m3u8_url).await?;
 
         // 更新总分片数和预计大小
         task_service
-            .update_task_segments(&task_id, m3u8_info.segments.len() as i32)
+            .update_task_segments(&task_id, download_source.total_segments() as i32)
             .await?;
-        if let Some(size) = m3u8_info.total_size {
+        if let Some(size) = download_source.total_size() {
             task_service
                 .update_task_estimated_size(&task_id, size)
                 .await?;
@@ -323,7 +323,12 @@ impl DownloadService {
             },
             task_service.clone(),
         )?);
-        let segments = m3u8_info.segments.clone();
+        let video_segments = download_source.video.segments.clone();
+        let audio_segments = download_source
+            .audio
+            .as_ref()
+            .map(|audio| audio.segments.clone());
+        let segments = download_source.all_segments();
         downloader
             .start_download(task_id.clone(), segments.clone(), temp_dir.clone(), tx)
             .await?;
@@ -348,7 +353,13 @@ impl DownloadService {
 
         // 5. 合并视频
         task_service.update_task_status(&task_id, "merging").await?;
-        VideoMerger::merge(&temp_dir, &output_file, &segments).await?;
+        VideoMerger::merge(
+            &temp_dir,
+            &output_file,
+            &video_segments,
+            audio_segments.as_deref(),
+        )
+        .await?;
 
         // 6. 完成
         task_service

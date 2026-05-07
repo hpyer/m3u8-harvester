@@ -6,10 +6,12 @@ import type {
   AppVersionInfo,
   ConfirmationItem,
   FolderInfo,
+  M3U8StreamSelection,
   TaskCategory,
   TaskGroup,
   TaskItem,
   TaskStatus,
+  VariantSelectionItem,
 } from '../types/app';
 
 type StatusSnapshot = Record<string, TaskStatus>;
@@ -36,11 +38,15 @@ const createEmptyAddTaskPayload = (): AddTaskPayload => ({
   year: '',
   season: '',
   rawSubtasks: '',
+  streamSelections: {},
 });
 
 const ACTIVE_STATUSES: TaskStatus[] = ['downloading', 'merging', 'pending', 'parsing', 'active'];
 const RUNNABLE_STATUSES: TaskStatus[] = ['pending', 'downloading', 'parsing', 'merging', 'active'];
 const RESUMABLE_STATUSES: TaskStatus[] = ['paused', 'failed'];
+let variantSelectionCountdownTimer: ReturnType<typeof setInterval> | null = null;
+let variantSelectionResolver: ((value: Record<string, M3U8StreamSelection> | null) => void) | null =
+  null;
 
 export const useAppStore = defineStore('app', {
   state: () => ({
@@ -55,6 +61,9 @@ export const useAppStore = defineStore('app', {
     theme: localStorage.getItem('theme') || 'cupcake',
     pollTimer: null as ReturnType<typeof setInterval> | null,
     confirmations: [] as ConfirmationItem[],
+    isVariantSelectionModalOpen: false,
+    variantSelectionItems: [] as VariantSelectionItem[],
+    variantSelectionCountdown: 30,
   }),
   actions: {
     async fetchTasks() {
@@ -289,6 +298,7 @@ export const useAppStore = defineStore('app', {
       }
     },
     openAddTaskModal(data?: Partial<AddTaskPayload>) {
+      this.closeVariantSelectionModal();
       if (data) {
         this.addTaskData = {
           title: data.title || '',
@@ -296,6 +306,7 @@ export const useAppStore = defineStore('app', {
           year: data.year || '',
           season: data.season || '',
           rawSubtasks: '',
+          streamSelections: {},
         };
       } else {
         this.addTaskData = createEmptyAddTaskPayload();
@@ -363,12 +374,122 @@ export const useAppStore = defineStore('app', {
     },
     async submitNewTask(task: AddTaskPayload) {
       try {
-        await api.createTask(task);
+        const streamSelections = await this.resolveStreamSelections(task.rawSubtasks);
+        if (streamSelections === null) {
+          return;
+        }
+
+        await api.createTask({ ...task, streamSelections });
         this.isAddTaskModalOpen = false;
+        this.addTaskData = createEmptyAddTaskPayload();
         await this.fetchTasks();
       } catch (_e) {
         alert('提交任务失败');
       }
+    },
+    async resolveStreamSelections(rawSubtasks: string) {
+      const lines = rawSubtasks
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const probeResults = await Promise.all(
+        lines.map(async (line, lineIndex) => {
+          const [url, ...titleParts] = line.split(/\s+/);
+          if (!url) return null;
+
+          try {
+            const probe = await api.probeM3U8(url);
+            if (!probe.isMaster || probe.variants.length <= 1) {
+              return null;
+            }
+
+            return {
+              lineIndex,
+              rawLine: line,
+              url,
+              title: titleParts.join(' '),
+              selectedIndex: probe.defaultVariantIndex ?? 0,
+              probe,
+            } satisfies VariantSelectionItem;
+          } catch (_error) {
+            return null;
+          }
+        }),
+      );
+
+      const items = probeResults.filter((item): item is VariantSelectionItem => item !== null);
+      if (items.length === 0) {
+        return {};
+      }
+
+      this.isVariantSelectionModalOpen = true;
+      this.variantSelectionItems = items;
+      this.variantSelectionCountdown = 30;
+
+      if (variantSelectionCountdownTimer) {
+        clearInterval(variantSelectionCountdownTimer);
+      }
+
+      return await new Promise<Record<string, M3U8StreamSelection> | null>((resolve) => {
+        variantSelectionResolver = resolve;
+        variantSelectionCountdownTimer = setInterval(() => {
+          if (this.variantSelectionCountdown <= 1) {
+            this.confirmVariantSelections();
+            return;
+          }
+          this.variantSelectionCountdown -= 1;
+        }, 1000);
+      });
+    },
+    updateVariantSelection(lineIndex: number, selectedIndex: number) {
+      const item = this.variantSelectionItems.find((entry) => entry.lineIndex === lineIndex);
+      if (item) {
+        item.selectedIndex = selectedIndex;
+      }
+    },
+    confirmVariantSelections() {
+      const resolver = variantSelectionResolver;
+      this.stopVariantSelectionCountdown();
+      const selections = Object.fromEntries(
+        this.variantSelectionItems.map((item) => {
+          const variant = item.probe.variants[item.selectedIndex];
+          return [
+            String(item.lineIndex),
+            {
+              originalUrl: item.url,
+              videoUrl: variant.videoUrl,
+              audioUrl: variant.audioUrl,
+              resolution: variant.resolution,
+              bandwidth: variant.bandwidth,
+              averageBandwidth: variant.averageBandwidth,
+              codecs: variant.codecs,
+              audioName: variant.audioName,
+            } satisfies M3U8StreamSelection,
+          ];
+        }),
+      );
+      this.closeVariantSelectionModal();
+      resolver?.(selections);
+    },
+    cancelVariantSelections() {
+      const resolver = variantSelectionResolver;
+      this.stopVariantSelectionCountdown();
+      this.closeVariantSelectionModal();
+      resolver?.(null);
+    },
+    closeVariantSelectionModal() {
+      this.stopVariantSelectionCountdown();
+      this.isVariantSelectionModalOpen = false;
+      this.variantSelectionItems = [];
+      this.variantSelectionCountdown = 30;
+    },
+    stopVariantSelectionCountdown() {
+      if (variantSelectionCountdownTimer) {
+        clearInterval(variantSelectionCountdownTimer);
+        variantSelectionCountdownTimer = null;
+      }
+      variantSelectionResolver = null;
     },
     async deleteFile(id: string) {
       if (!confirm('确定删除该视频文件吗？')) return;

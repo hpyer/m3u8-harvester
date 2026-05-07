@@ -10,6 +10,7 @@ import LocalFiles from './components/features/LocalFiles.vue';
 import AddTaskModal from './components/modals/AddTaskModal.vue';
 import SettingsModal from './components/modals/SettingsModal.vue';
 import OverwriteModal from './components/modals/OverwriteModal.vue';
+import VariantSelectionModal from './components/modals/VariantSelectionModal.vue';
 import CommonIcon from './components/ui/CommonIcon.vue';
 
 const store = useAppStore();
@@ -77,8 +78,8 @@ onUnmounted(() => {});
     <!-- Modals -->
     <AddTaskModal />
     <SettingsModal />
-
     <OverwriteModal />
+    <VariantSelectionModal />
   </div>
 </template>
 
