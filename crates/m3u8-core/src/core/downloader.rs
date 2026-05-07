@@ -1,8 +1,15 @@
-use anyhow::{anyhow, Result};
+use crate::utils::m3u8::{EncryptionKey, SegmentInfo};
+use aes::Aes128;
+use anyhow::{anyhow, Context, Result};
+use cbc::cipher::{
+    block_padding::{NoPadding, Pkcs7},
+    BlockDecryptMut, KeyIvInit,
+};
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Serialize;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs as tfs;
 use tokio::io::AsyncWriteExt;
@@ -71,22 +78,28 @@ impl Downloader {
     pub async fn start_download(
         &self,
         task_id: String,
-        urls: Vec<String>,
+        segments: Vec<SegmentInfo>,
         save_path: PathBuf,
         progress_tx: mpsc::Sender<DownloadProgress>,
     ) -> Result<()> {
-        let total = urls.len();
+        let total = segments.len();
         let completed = Arc::new(tokio::sync::Mutex::new(0));
         let semaphore = Arc::new(Semaphore::new(self.options.concurrency));
+        let key_cache = Arc::new(tokio::sync::Mutex::new(HashMap::<String, Vec<u8>>::new()));
 
         // 确保目录存在
         tfs::create_dir_all(&save_path).await?;
 
+        self.download_init_maps(&segments, &save_path).await?;
+
         // 检查已下载的文件（续传支持）
-        let mut initial_completed = 0;
-        let mut entries = tfs::read_dir(&save_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            if entry.file_name().to_string_lossy().ends_with(".ts") {
+        let expected_files: HashSet<String> = segments
+            .iter()
+            .map(|segment| segment.file_name.clone())
+            .collect();
+        let mut initial_completed = 0usize;
+        for file_name in &expected_files {
+            if tfs::metadata(save_path.join(file_name)).await.is_ok() {
                 initial_completed += 1;
             }
         }
@@ -99,7 +112,7 @@ impl Downloader {
         let mut handles = Vec::new();
         let client = self.client.clone();
 
-        for (index, url) in urls.into_iter().enumerate() {
+        for segment in segments {
             let semaphore = semaphore.clone();
             let client = client.clone();
             let task_id = task_id.clone();
@@ -109,6 +122,7 @@ impl Downloader {
             let task_service = self.task_service.clone();
             let retry_count = self.options.retry_count;
             let retry_delay_ms = self.options.retry_delay_ms;
+            let key_cache = key_cache.clone();
 
             let handle = tokio::spawn(async move {
                 let permit = semaphore.acquire_owned().await.unwrap();
@@ -121,9 +135,8 @@ impl Downloader {
                     }
                 }
 
-                let file_name = format!("{:05}.ts", index);
-                let file_path = save_path.join(&file_name);
-                let tmp_path = save_path.join(format!("{}.tmp", file_name));
+                let file_path = save_path.join(&segment.file_name);
+                let tmp_path = save_path.join(format!("{}.tmp", segment.file_name));
 
                 // 检查是否已下载
                 if tfs::metadata(&file_path).await.is_ok() {
@@ -133,7 +146,11 @@ impl Downloader {
 
                 let mut remaining_retries = retry_count.max(1);
                 while remaining_retries > 0 {
-                    match Self::download_segment(&client, &url, &tmp_path, &file_path).await {
+                    match Self::download_segment(
+                        &client, &segment, &key_cache, &tmp_path, &file_path,
+                    )
+                    .await
+                    {
                         Ok(_) => {
                             let mut c = completed.lock().await;
                             *c += 1;
@@ -167,7 +184,7 @@ impl Downloader {
                     }
                 }
                 drop(permit);
-                Err(anyhow!("下载分片失败: {}", url))
+                Err(anyhow!("下载分片失败: {}", segment.url))
             });
             handles.push(handle);
         }
@@ -181,25 +198,140 @@ impl Downloader {
 
     async fn download_segment(
         client: &Client,
-        url: &str,
+        segment: &SegmentInfo,
+        key_cache: &tokio::sync::Mutex<HashMap<String, Vec<u8>>>,
         tmp_path: &PathBuf,
         file_path: &PathBuf,
     ) -> Result<()> {
+        let mut data = Self::download_bytes(client, &segment.url).await?;
+
+        if let Some(key) = segment.key.as_ref() {
+            data = Self::decrypt_segment(client, key_cache, data, key, segment.media_sequence)
+                .await
+                .with_context(|| format!("解密分片失败: {}", segment.url))?;
+        }
+
+        let mut file = tfs::File::create(tmp_path).await?;
+        file.write_all(&data).await?;
+        file.flush().await?;
+        tfs::rename(tmp_path, file_path).await?;
+        Ok(())
+    }
+
+    async fn download_init_maps(&self, segments: &[SegmentInfo], save_path: &Path) -> Result<()> {
+        let mut downloaded = HashSet::new();
+
+        for segment in segments {
+            let Some(init_map) = segment.init_map.as_ref() else {
+                continue;
+            };
+
+            if !downloaded.insert(init_map.file_name.clone()) {
+                continue;
+            }
+
+            let file_path = save_path.join(&init_map.file_name);
+            if tfs::metadata(&file_path).await.is_ok() {
+                continue;
+            }
+
+            let data = Self::download_bytes(&self.client, &init_map.url).await?;
+            let tmp_path = save_path.join(format!("{}.tmp", init_map.file_name));
+            let mut file = tfs::File::create(&tmp_path).await?;
+            file.write_all(&data).await?;
+            file.flush().await?;
+            tfs::rename(tmp_path, file_path).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn download_bytes(client: &Client, url: &str) -> Result<Vec<u8>> {
         let response = client.get(url).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!("HTTP 错误: {}", response.status()));
         }
 
-        let mut file = tfs::File::create(tmp_path).await?;
+        let mut bytes = Vec::new();
         let mut stream = response.bytes_stream();
-
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-            file.write_all(&chunk).await?;
+            bytes.extend_from_slice(&chunk?);
+        }
+        Ok(bytes)
+    }
+
+    async fn decrypt_segment(
+        client: &Client,
+        key_cache: &tokio::sync::Mutex<HashMap<String, Vec<u8>>>,
+        data: Vec<u8>,
+        key: &EncryptionKey,
+        media_sequence: u64,
+    ) -> Result<Vec<u8>> {
+        let key_bytes = {
+            let mut cache = key_cache.lock().await;
+            if let Some(bytes) = cache.get(&key.url) {
+                bytes.clone()
+            } else {
+                let bytes = Self::download_bytes(client, &key.url).await?;
+                if bytes.len() != 16 {
+                    return Err(anyhow!("AES-128 密钥长度无效: {} 字节", bytes.len()));
+                }
+                cache.insert(key.url.clone(), bytes.clone());
+                bytes
+            }
+        };
+
+        let iv = parse_iv(key.iv.as_deref(), media_sequence)?;
+        decrypt_aes128_cbc(data, &key_bytes, &iv)
+    }
+}
+
+fn parse_iv(iv: Option<&str>, media_sequence: u64) -> Result<[u8; 16]> {
+    if let Some(value) = iv {
+        let trimmed = value.trim();
+        let hex = trimmed
+            .strip_prefix("0x")
+            .or_else(|| trimmed.strip_prefix("0X"))
+            .unwrap_or(trimmed);
+
+        if hex.len() != 32 {
+            return Err(anyhow!("AES-128 IV 长度无效: {}", value));
         }
 
-        file.flush().await?;
-        tfs::rename(tmp_path, file_path).await?;
-        Ok(())
+        let mut iv_bytes = [0u8; 16];
+        for (index, chunk) in hex.as_bytes().chunks(2).enumerate() {
+            let part = std::str::from_utf8(chunk)?;
+            iv_bytes[index] = u8::from_str_radix(part, 16)?;
+        }
+        return Ok(iv_bytes);
+    }
+
+    let mut iv_bytes = [0u8; 16];
+    iv_bytes[8..].copy_from_slice(&media_sequence.to_be_bytes());
+    Ok(iv_bytes)
+}
+
+fn decrypt_aes128_cbc(data: Vec<u8>, key: &[u8], iv: &[u8; 16]) -> Result<Vec<u8>> {
+    type Aes128CbcDec = cbc::Decryptor<Aes128>;
+
+    let decrypt_with_padding = |mut buffer: Vec<u8>| -> Result<Vec<u8>> {
+        let decrypted = Aes128CbcDec::new_from_slices(key, iv)
+            .map_err(|_| anyhow!("AES-128 解密器初始化失败"))?
+            .decrypt_padded_mut::<Pkcs7>(&mut buffer)
+            .map_err(|_| anyhow!("AES-128 CBC 解密失败"))?;
+        Ok(decrypted.to_vec())
+    };
+
+    match decrypt_with_padding(data.clone()) {
+        Ok(bytes) => Ok(bytes),
+        Err(_) if data.len().is_multiple_of(16) => {
+            let mut buffer = data;
+            let decrypted = Aes128CbcDec::new_from_slices(key, iv)
+                .map_err(|_| anyhow!("AES-128 解密器初始化失败"))?
+                .decrypt_padded_mut::<NoPadding>(&mut buffer)
+                .map_err(|_| anyhow!("AES-128 CBC 解密失败"))?;
+            Ok(decrypted.to_vec())
+        }
+        Err(err) => Err(err),
     }
 }

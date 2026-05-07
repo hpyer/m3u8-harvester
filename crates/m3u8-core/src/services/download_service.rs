@@ -62,11 +62,12 @@ impl DownloadService {
         let active_tasks = self.active_tasks.clone();
         let overwrite_waiters = self.overwrite_waiters.clone();
         let task_id_for_cleanup = task_id.clone();
+        let task_service_for_run = task_service.clone();
 
         tokio::spawn(async move {
             if let Err(e) = Self::execute_task(
                 task_id,
-                task_service,
+                task_service_for_run,
                 setting_service,
                 default_download_path,
                 use_configured_download_path,
@@ -74,6 +75,34 @@ impl DownloadService {
             )
             .await
             {
+                let error_message = e.to_string();
+                if let Err(update_err) = task_service
+                    .update_task_status(&task_id_for_cleanup, "failed")
+                    .await
+                {
+                    error!(
+                        "Failed to mark task {} as failed: {}",
+                        task_id_for_cleanup, update_err
+                    );
+                }
+                if let Err(update_err) = task_service
+                    .update_task_error_message(&task_id_for_cleanup, Some(&error_message))
+                    .await
+                {
+                    error!(
+                        "Failed to persist error message for task {}: {}",
+                        task_id_for_cleanup, update_err
+                    );
+                }
+                if let Some(parent_id) = task_service
+                    .find_task(&task_id_for_cleanup)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|task| task.parent_id)
+                {
+                    let _ = task_service.update_parent_status(&parent_id).await;
+                }
                 error!("Task failed: {}", e);
             }
 
@@ -151,6 +180,9 @@ impl DownloadService {
         };
 
         let output_file = Self::build_output_path(&download_root, &task_service, &task).await?;
+        task_service
+            .update_task_error_message(&task_id, None)
+            .await?;
         task_service
             .update_task_output_path(&task_id, &output_file.to_string_lossy())
             .await?;
@@ -260,8 +292,9 @@ impl DownloadService {
             },
             task_service.clone(),
         )?);
+        let segments = m3u8_info.segments.clone();
         downloader
-            .start_download(task_id.clone(), m3u8_info.segments, temp_dir.clone(), tx)
+            .start_download(task_id.clone(), segments.clone(), temp_dir.clone(), tx)
             .await?;
         let _ = progress_listener.await;
 
@@ -284,7 +317,7 @@ impl DownloadService {
 
         // 5. 合并视频
         task_service.update_task_status(&task_id, "merging").await?;
-        VideoMerger::merge(&temp_dir, &output_file).await?;
+        VideoMerger::merge(&temp_dir, &output_file, &segments).await?;
 
         // 6. 完成
         task_service

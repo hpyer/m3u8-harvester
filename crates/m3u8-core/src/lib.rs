@@ -12,5 +12,5 @@ pub use services::download_service::DownloadService;
 pub use services::file_service::{FileInfo, FileService, FolderInfo};
 pub use services::setting_service::SettingService;
 pub use services::task_service::{TaskService, TaskWithSubtasks};
-pub use utils::m3u8::{parse_m3u8, M3U8Info};
+pub use utils::m3u8::{parse_m3u8, InitMapInfo, M3U8Info, SegmentInfo};
 pub use utils::merger::VideoMerger;
