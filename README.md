@@ -8,6 +8,8 @@
 - ✅ **并发下载**: 后端受控并发（默认 5 线程），无内存溢出的流式下载。
 - ✅ **实时进度**: 自动刷新机制，实时展示下载百分比及状态变化。
 - ✅ **HLS 兼容性**: 支持常见 `AES-128` 加密分片、`EXT-X-MAP` 初始化段和 `fMP4` HLS 合并。
+- ✅ **多清晰度选择**: 支持 `Master Playlist` 探测，遇到多分辨率流时可在弹窗中选择具体清晰度。
+- ✅ **音视频分离流支持**: 支持带 `EXT-X-MEDIA` 音轨的 HLS，下载时会自动组合选中的视频流和对应音频流。
 - ✅ **FFmpeg 合并**: 无损快速合并，支持用户自定义文件名。
 - ✅ **任务管理**: 完整的 CRUD，支持失败原因展示与未完成任务临时文件清理。
 - ✅ **桌面版**: 基于 Tauri 2 复用同一套 Vue UI，可直接调用本地 Rust 服务能力。
@@ -181,6 +183,14 @@ pnpm install
 - 删除未完成任务时，也会自动清理该任务及其子任务对应的 `.temp/<task_id>` 临时目录。
 - 任务失败时，任务列表会保留错误信息；如果是缺少 `ffmpeg`，前端会显示对应平台的安装提示。
 
+### 多清晰度 M3U8 行为
+
+- 如果提交的是普通 `Media Playlist`，任务会按当前行为直接创建并开始下载。
+- 如果提交的是包含多个 `#EXT-X-STREAM-INF` 的 `Master Playlist`，前端会先探测可选分辨率，再弹出选择框。
+- 弹窗会展示每条任务可选的分辨率、码率，以及是否为音视频分离流。
+- 用户可以手动选择清晰度后继续；30 秒内未操作时，会自动按最高分辨率继续下载。
+- 对于带 `EXT-X-MEDIA` 音轨的 Master Playlist，系统会同时下载选中的视频流和匹配的音频流，最终合并为一个 MP4 文件，避免出现无声视频。
+
 ### 3. 环境变量 (.env)
 
 你可以直接基于根目录下的 `.env.example` 创建 `.env`：
@@ -258,6 +268,14 @@ cargo test --workspace
 pnpm --filter @m3u8-harvester/web build
 cargo fmt --all
 cargo clippy --workspace -- -D warnings
+```
+
+如果改动涉及多清晰度探测、音视频分离下载或任务创建前的选择弹窗，建议额外验证：
+
+```bash
+cargo test -p m3u8-core
+cargo test -p m3u8-server
+pnpm --filter @m3u8-harvester/web build
 ```
 
 ### 6. 提交约束

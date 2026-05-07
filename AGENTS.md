@@ -56,6 +56,8 @@ This file gives coding agents the minimum project-specific context needed to mak
   - local file tree generation for the web UI
 - `crates/m3u8-core/src/core/downloader.rs`
   - segment download engine
+- `crates/m3u8-core/src/utils/m3u8.rs`
+  - M3U8 probe, master/media playlist parsing, variant and audio-rendition selection
 - `crates/m3u8-core/src/utils/merger.rs`
   - FFmpeg merge integration
 - `apps/web/src/components/features/TaskList.vue`
@@ -66,6 +68,10 @@ This file gives coding agents the minimum project-specific context needed to mak
   - recursive folder tree rendering
 - `apps/web/src/services/api.ts`
   - frontend API client
+- `apps/web/src/components/modals/AddTaskModal.vue`
+  - task creation entry modal
+- `apps/web/src/components/modals/VariantSelectionModal.vue`
+  - master playlist resolution selection modal with auto-continue countdown
 
 ## Setup Assumptions
 
@@ -150,6 +156,14 @@ The project already has logic for series-style season directories.
 - If a subtask title or explicit filename contains a season marker like `S03E05`, that season wins over the parent task default season.
 - Do not flatten season folders in backend file APIs or in the web UI unless the feature explicitly asks for it.
 
+### 2.1 Preserve variant-selection semantics
+
+- Master Playlist support now exists in the task-creation flow.
+- Do not send a raw master-playlist URL straight into the download path when a concrete variant selection is required.
+- If the source has separate audio via `EXT-X-MEDIA`, the selected audio rendition must stay aligned with the selected video variant.
+- Frontend behavior currently defaults to the highest-resolution variant after 30 seconds if the user does not choose manually.
+- If you change probe payloads or selection storage format, update both HTTP and Tauri entrypoints and `apps/web/src/services/api.ts`.
+
 ### 3. Be careful with runtime data
 
 - `storage/` is runtime state, not source code.
@@ -188,6 +202,7 @@ Also inspect:
 - `crates/m3u8-core/src/models/task.rs`
 - `crates/m3u8-core/src/services/task_service.rs`
 - `crates/m3u8-core/src/core/downloader.rs`
+- `crates/m3u8-core/src/utils/m3u8.rs`
 - `crates/m3u8-core/src/utils/merger.rs`
 
 Validate with:
@@ -206,6 +221,28 @@ If the change affects desktop command wiring or packaging, also run:
 
 ```bash
 pnpm --filter @m3u8-harvester/desktop build
+```
+
+### When changing master playlist probing or resolution selection
+
+Backend and frontend must stay aligned.
+
+Check together:
+
+- `crates/m3u8-core/src/utils/m3u8.rs`
+- `apps/server/src/handlers/task_handler.rs`
+- `apps/desktop/src-tauri/src/main.rs`
+- `apps/web/src/services/api.ts`
+- `apps/web/src/stores/appStore.ts`
+- `apps/web/src/components/modals/AddTaskModal.vue`
+- `apps/web/src/components/modals/VariantSelectionModal.vue`
+
+Validate with:
+
+```bash
+cargo test -p m3u8-core
+cargo test -p m3u8-server
+pnpm --filter @m3u8-harvester/web build
 ```
 
 ### When changing file tree or local file display
