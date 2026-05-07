@@ -33,8 +33,8 @@ This file gives coding agents the minimum project-specific context needed to mak
 - `storage`
   - Runtime data directory
   - `storage/db`: SQLite database
-  - `storage/downloads`: merged video output
-  - `storage/temp`: in-progress download artifacts
+  - `storage/downloads`: merged video output; active downloads use `storage/downloads/.temp/<task_id>` by default in server mode
+  - `storage/temp`: legacy runtime directory retained for older deployments/documentation
 - `.husky`
   - Git hooks
   - `pre-commit` runs `lint-staged`
@@ -153,7 +153,7 @@ The project already has logic for series-style season directories.
 ### 3. Be careful with runtime data
 
 - `storage/` is runtime state, not source code.
-- Do not casually delete or rewrite files under `storage/db`, `storage/downloads`, or `storage/temp`.
+- Do not casually delete or rewrite files under `storage/db`, `storage/downloads`, `storage/downloads/.temp`, or `storage/temp`.
 - If a change touches path generation, confirm it does not break existing download directory conventions.
 
 ### 4. Respect current UI patterns
