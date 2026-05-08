@@ -194,7 +194,9 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs:
+      - precheck
+      - build
     runs-on: ubuntu-latest
     permissions:
       contents: write
