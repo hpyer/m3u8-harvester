@@ -1,14 +1,22 @@
+# syntax=docker/dockerfile:1.7
+
 # --- Stage 1: Frontend Builder ---
-FROM node:20-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 WORKDIR /app
-COPY . .
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/desktop/package.json apps/desktop/package.json
 RUN corepack enable && corepack install
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store && \
+    pnpm install --frozen-lockfile
+COPY . .
 RUN pnpm --filter @m3u8-harvester/web build
 
 # --- Stage 2: Backend Builder ---
 FROM rust:alpine AS backend-builder
 WORKDIR /app
+ARG TARGETPLATFORM
 RUN apk add --no-cache musl-dev
 ARG APP_DOCKER_IMAGE=ghcr.io/hpyer/m3u8-harvester
 ARG APP_DOCKER_VERSION=1.1.0
@@ -18,7 +26,11 @@ ENV APP_DOCKER_VERSION=${APP_DOCKER_VERSION}
 ENV APP_TAURI_VERSION=${APP_TAURI_VERSION}
 COPY . .
 # 使用锁文件保证本地与 CI 构建结果一致
-RUN cargo build --release --locked -p m3u8-server
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,id=cargo-target-${TARGETPLATFORM},target=/app/target \
+    cargo build --release --locked -p m3u8-server && \
+    cp target/release/m3u8-server /tmp/m3u8-server
 
 # --- Stage 3: Final Runner ---
 FROM alpine:3.19 AS runner
@@ -36,7 +48,7 @@ ENV RUST_LOG=info \
     STATIC_DIR=/app/dist
 
 # 复制产物
-COPY --from=backend-builder /app/target/release/m3u8-server ./m3u8-server
+COPY --from=backend-builder /tmp/m3u8-server ./m3u8-server
 COPY --from=frontend-builder /app/apps/web/dist ./dist
 
 # 创建必要的目录
