@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
+## [1.2.0] - 2026-05-11
+
+### Added
+
+- Added TMDB search integration for task creation: users can search movies and TV series, auto-fill title/category/year, and for TV series auto-generate `SxxExx` naming rows with episode names.
+- Added editable naming row preview in the task creation modal with per-row URL, generated title, and manual override support.
+- Added TMDB settings fields (API Key, API Base URL) in the settings dialog.
+- Added TMDB API proxy endpoints for HTTP server (tmdb_handler) and Tauri desktop commands.
+- Added `M3U8NamingRow`, `TmdbSearchResult`, `TmdbSeasonDetails`, and `TmdbEpisode` types to the frontend type system.
+
+### Changed
+
+- Compacted the add task modal layout: smaller header, smaller input controls, reduced padding and spacing.
+- Compacted the settings modal layout: removed version info section, smaller inputs, reduced padding and spacing.
+- Updated task submission to rebuild subtask strings from editable naming rows instead of raw textarea content.
+- Improved Docker build with layer caching for pnpm store, cargo registry, and cargo target directories.
+- Bumped server, core, desktop, web fallback, and Docker version metadata to `1.2.0`.
+
 ## [1.1.0] - 2026-05-07
 
 ### Added
