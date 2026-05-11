@@ -313,6 +313,7 @@ export const useAppStore = defineStore('app', {
     },
     openAddTaskModal(data?: Partial<AddTaskPayload>) {
       this.closeVariantSelectionModal();
+      this.resetTmdbTaskHelper();
       if (data) {
         this.addTaskData = {
           title: data.title || '',
@@ -326,6 +327,75 @@ export const useAppStore = defineStore('app', {
         this.addTaskData = createEmptyAddTaskPayload();
       }
       this.isAddTaskModalOpen = true;
+    },
+    async searchTmdb() {
+      const query = this.tmdbSearchQuery.trim() || this.addTaskData.title.trim();
+      if (!query) {
+        this.tmdbSearchResults = [];
+        this.tmdbSearchError = '';
+        return;
+      }
+
+      if (!this.settings.tmdbApiKey.trim()) {
+        this.tmdbSearchError = '请先在设置中填写 TMDB API Key';
+        this.tmdbSearchResults = [];
+        return;
+      }
+
+      this.tmdbSearchLoading = true;
+      this.tmdbSearchError = '';
+      try {
+        this.tmdbSearchResults = await api.searchTmdb(query);
+      } catch (_error) {
+        this.tmdbSearchResults = [];
+        this.tmdbSearchError = 'TMDB 查询失败，请检查 API Key 或 API 地址';
+      } finally {
+        this.tmdbSearchLoading = false;
+      }
+    },
+    async selectTmdbResult(result: TmdbSearchResult) {
+      this.selectedTmdbResult = result;
+      this.addTaskData.title = result.title;
+      this.addTaskData.category = result.mediaType === 'movie' ? 'movie' : 'series';
+      this.addTaskData.year = result.year ?? '';
+
+      if (result.mediaType === 'tv') {
+        if (!this.addTaskData.season) {
+          this.addTaskData.season = '1';
+        }
+        this.tmdbSeasonNumber = this.addTaskData.season || '1';
+        await this.loadTmdbSeason();
+      } else {
+        this.selectedTmdbSeason = null;
+      }
+
+      this.parseNamingRows(this.addTaskData.rawSubtasks);
+    },
+    async loadTmdbSeason() {
+      if (!this.selectedTmdbResult || this.selectedTmdbResult.mediaType !== 'tv') {
+        this.selectedTmdbSeason = null;
+        return;
+      }
+
+      const seasonNumber = Number.parseInt(
+        this.tmdbSeasonNumber || this.addTaskData.season || '1',
+        10,
+      );
+      const safeSeason = Number.isFinite(seasonNumber) && seasonNumber >= 0 ? seasonNumber : 1;
+      this.tmdbSeasonNumber = String(safeSeason);
+      this.addTaskData.season = String(safeSeason);
+
+      try {
+        this.selectedTmdbSeason = await api.getTmdbTvSeason(this.selectedTmdbResult.id, safeSeason);
+      } catch (_error) {
+        this.selectedTmdbSeason = null;
+        this.tmdbSearchError = '季集信息加载失败，仍可手动命名';
+      }
+
+      this.parseNamingRows(this.addTaskData.rawSubtasks);
+    },
+    updateTmdbEpisodeMapping() {
+      this.parseNamingRows(this.addTaskData.rawSubtasks);
     },
     async fetchLocalFiles() {
       try {
