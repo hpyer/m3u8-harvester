@@ -18,6 +18,13 @@ const searchTmdb = async () => {
   await store.searchTmdb();
 };
 
+const openTmdbSearchModal = async () => {
+  store.openTmdbSearchModal();
+  if (isTmdbConfigured.value) {
+    await store.searchTmdb();
+  }
+};
+
 const selectTmdbResult = async (result: TmdbSearchResult) => {
   await store.selectTmdbResult(result);
 };
@@ -40,74 +47,29 @@ const updateManualTitle = (lineIndex: number, event: Event) => {
     <div class="modal-box w-11/12 max-w-4xl">
       <h3 class="font-bold text-lg mb-6">添加新任务</h3>
 
-      <section class="mb-5 rounded-lg border border-base-300 bg-base-200/40 p-4">
-        <div class="flex flex-col gap-3">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h4 class="font-semibold text-sm">TMDB 辅助填表</h4>
-              <p class="text-xs opacity-60 mt-1">可选，用于匹配电影/剧集信息并生成命名预览。</p>
-            </div>
-            <span v-if="!isTmdbConfigured" class="badge badge-warning badge-sm">未配置</span>
-          </div>
-
-          <div class="join w-full">
-            <input
-              v-model="store.tmdbSearchQuery"
-              type="text"
-              class="input input-bordered join-item w-full"
-              :disabled="!isTmdbConfigured"
-              placeholder="输入电影或剧集名称"
-              @keyup.enter="searchTmdb"
-            />
-            <button
-              class="btn btn-primary join-item"
-              :disabled="!isTmdbConfigured || store.tmdbSearchLoading"
-              @click="searchTmdb"
-            >
-              {{ store.tmdbSearchLoading ? '查询中' : '查询' }}
-            </button>
-          </div>
-
-          <p v-if="!isTmdbConfigured" class="text-xs text-warning">
-            请先在设置中填写 TMDB API Key 和 API 地址。
-          </p>
-          <p v-if="store.tmdbSearchError" class="text-xs text-error">
-            {{ store.tmdbSearchError }}
-          </p>
-
-          <div v-if="store.tmdbSearchResults.length" class="grid gap-2 max-h-40 overflow-y-auto">
-            <button
-              v-for="result in store.tmdbSearchResults"
-              :key="`${result.mediaType}-${result.id}`"
-              type="button"
-              class="btn btn-sm justify-between"
-              :class="
-                store.selectedTmdbResult?.id === result.id &&
-                store.selectedTmdbResult?.mediaType === result.mediaType
-                  ? 'btn-primary'
-                  : 'btn-outline'
-              "
-              @click="selectTmdbResult(result)"
-            >
-              <span class="truncate">{{ result.title }}</span>
-              <span class="opacity-70">
-                {{ result.mediaType === 'movie' ? '电影' : '剧集' }} {{ result.year || '' }}
-              </span>
-            </button>
-          </div>
-        </div>
-      </section>
-
       <div class="form-control mb-4">
         <label class="label">
           <span class="label-text font-bold">任务名称 (目录名)</span>
         </label>
-        <input
-          v-model="store.addTaskData.title"
-          type="text"
-          placeholder="例如：奥本海默"
-          class="input input-bordered w-full"
-        />
+        <div class="join w-full">
+          <input
+            v-model="store.addTaskData.title"
+            type="text"
+            placeholder="例如：奥本海默"
+            class="input input-bordered join-item w-full"
+          />
+          <button
+            type="button"
+            class="btn btn-primary join-item"
+            :disabled="store.tmdbSearchLoading || !store.addTaskData.title.trim()"
+            @click="openTmdbSearchModal"
+          >
+            {{ store.tmdbSearchLoading ? '查询中' : 'TMDB 查询' }}
+          </button>
+        </div>
+        <p v-if="!isTmdbConfigured" class="text-xs text-warning mt-1">
+          TMDB 未配置，仍可手动填写任务。
+        </p>
       </div>
 
       <div class="form-control">
@@ -166,7 +128,7 @@ const updateManualTitle = (lineIndex: number, event: Event) => {
         v-if="
           store.addTaskData.category === 'series' && store.selectedTmdbResult?.mediaType === 'tv'
         "
-        class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3"
+        class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3"
       >
         <div class="form-control">
           <label class="label pb-1"><span class="label-text font-medium">TMDB 季号</span></label>
@@ -188,50 +150,57 @@ const updateManualTitle = (lineIndex: number, event: Event) => {
             @input="store.updateTmdbEpisodeMapping"
           />
         </div>
-        <div class="flex items-end">
-          <button class="btn btn-outline w-full" @click="store.loadTmdbSeason">刷新季集</button>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(18rem,0.85fr)_1.35fr] gap-4">
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-bold">子任务列表 (m3u8 链接)</span>
+            <span class="label-text-alt opacity-50 text-xs">自动提取所有 m3u8 链接</span>
+          </label>
+          <textarea
+            v-model="store.addTaskData.rawSubtasks"
+            class="textarea textarea-bordered h-28 font-mono text-xs"
+            placeholder="粘贴包含 m3u8 链接的文本，支持多行或混合内容"
+            @input="parseRows"
+          ></textarea>
         </div>
-      </div>
 
-      <div class="form-control mt-4">
-        <label class="label">
-          <span class="label-text font-bold">子任务列表 (m3u8 链接)</span>
-          <span class="label-text-alt opacity-50 text-xs">每行一个：链接 [空格] 自定义文件名</span>
-        </label>
-        <textarea
-          v-model="store.addTaskData.rawSubtasks"
-          class="textarea textarea-bordered h-48 font-mono text-sm"
-          placeholder="https://example.com/a.m3u8 第01集&#10;https://example.com/b.m3u8 第02集"
-          @input="parseRows"
-        ></textarea>
-      </div>
-
-      <div
-        v-if="store.namingRows.length"
-        class="mt-4 rounded-lg border border-base-300 overflow-hidden"
-      >
-        <div class="bg-base-200 px-3 py-2 text-sm font-semibold">命名预览</div>
-        <div class="divide-y divide-base-300">
+        <div class="rounded-lg border border-base-300 overflow-hidden min-h-32">
+          <div class="bg-base-200 px-3 py-2 text-sm font-semibold">
+            任务预览
+            <span v-if="store.namingRows.length" class="badge badge-neutral badge-sm ml-2">
+              {{ store.namingRows.length }}
+            </span>
+          </div>
           <div
-            v-for="row in store.namingRows"
-            :key="row.lineIndex"
-            class="grid grid-cols-1 md:grid-cols-[4rem_1fr_1fr] gap-3 p-3 items-center"
+            v-if="store.namingRows.length"
+            class="divide-y divide-base-300 max-h-64 overflow-y-auto"
           >
-            <span class="badge badge-ghost">#{{ row.lineIndex + 1 }}</span>
-            <div class="min-w-0">
-              <p class="truncate font-mono text-xs opacity-70">{{ row.url }}</p>
-              <p v-if="row.generatedTitle" class="text-xs mt-1">
-                建议：<span class="font-mono">{{ row.generatedTitle }}</span>
-                <span v-if="row.episodeName" class="opacity-60"> · {{ row.episodeName }}</span>
-              </p>
+            <div
+              v-for="row in store.namingRows"
+              :key="row.lineIndex"
+              class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_1fr] gap-3 p-3 items-center"
+            >
+              <span class="badge badge-ghost">#{{ row.lineIndex + 1 }}</span>
+              <div class="min-w-0">
+                <p class="truncate font-mono text-xs opacity-70">{{ row.url }}</p>
+                <p v-if="row.generatedTitle" class="text-xs mt-1">
+                  建议：<span class="font-mono">{{ row.generatedTitle }}</span>
+                  <span v-if="row.episodeName" class="opacity-60"> · {{ row.episodeName }}</span>
+                </p>
+              </div>
+              <input
+                :value="row.manualTitle"
+                type="text"
+                class="input input-bordered input-sm w-full"
+                placeholder="文件标题"
+                @input="updateManualTitle(row.lineIndex, $event)"
+              />
             </div>
-            <input
-              :value="row.manualTitle"
-              type="text"
-              class="input input-bordered input-sm w-full"
-              placeholder="手动标题，留空则用建议标题"
-              @input="updateManualTitle(row.lineIndex, $event)"
-            />
+          </div>
+          <div v-else class="px-3 py-8 text-center text-sm opacity-50">
+            粘贴 m3u8 链接后在这里编辑文件标题。
           </div>
         </div>
       </div>
@@ -242,6 +211,72 @@ const updateManualTitle = (lineIndex: number, event: Event) => {
       </div>
     </div>
     <form method="dialog" class="modal-backdrop" @click="store.isAddTaskModalOpen = false">
+      <button>close</button>
+    </form>
+  </dialog>
+
+  <dialog class="modal" :class="{ 'modal-open': store.isTmdbSearchModalOpen }">
+    <div class="modal-box w-11/12 max-w-2xl">
+      <h3 class="font-bold text-lg mb-4">选择 TMDB 结果</h3>
+
+      <div class="join w-full">
+        <input
+          v-model="store.tmdbSearchQuery"
+          type="text"
+          class="input input-bordered join-item w-full"
+          :disabled="!isTmdbConfigured"
+          placeholder="输入电影或剧集名称"
+          @keyup.enter="searchTmdb"
+        />
+        <button
+          type="button"
+          class="btn btn-primary join-item"
+          :disabled="!isTmdbConfigured || store.tmdbSearchLoading"
+          @click="searchTmdb"
+        >
+          {{ store.tmdbSearchLoading ? '查询中' : '查询' }}
+        </button>
+      </div>
+
+      <p v-if="!isTmdbConfigured" class="text-xs text-warning mt-2">
+        请先在设置中填写 TMDB API Key 和 API 地址。
+      </p>
+      <p v-if="store.tmdbSearchError" class="text-xs text-error mt-2">
+        {{ store.tmdbSearchError }}
+      </p>
+
+      <div v-if="store.tmdbSearchResults.length" class="grid gap-2 mt-4 max-h-80 overflow-y-auto">
+        <button
+          v-for="result in store.tmdbSearchResults"
+          :key="`${result.mediaType}-${result.id}`"
+          type="button"
+          class="btn justify-between"
+          :class="
+            store.selectedTmdbResult?.id === result.id &&
+            store.selectedTmdbResult?.mediaType === result.mediaType
+              ? 'btn-primary'
+              : 'btn-outline'
+          "
+          @click="selectTmdbResult(result)"
+        >
+          <span class="truncate">{{ result.title }}</span>
+          <span class="opacity-70">
+            {{ result.mediaType === 'movie' ? '电影' : '剧集' }} {{ result.year || '' }}
+          </span>
+        </button>
+      </div>
+      <div
+        v-else-if="!store.tmdbSearchLoading && !store.tmdbSearchError"
+        class="py-10 text-center text-sm opacity-50"
+      >
+        输入名称后查询 TMDB 结果。
+      </div>
+
+      <div class="modal-action">
+        <button class="btn btn-ghost" @click="store.closeTmdbSearchModal">取消</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop" @click="store.closeTmdbSearchModal">
       <button>close</button>
     </form>
   </dialog>

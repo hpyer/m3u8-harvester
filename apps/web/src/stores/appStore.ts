@@ -49,6 +49,7 @@ const createEmptyAddTaskPayload = (): AddTaskPayload => ({
 const ACTIVE_STATUSES: TaskStatus[] = ['downloading', 'merging', 'pending', 'parsing', 'active'];
 const RUNNABLE_STATUSES: TaskStatus[] = ['pending', 'downloading', 'parsing', 'merging', 'active'];
 const RESUMABLE_STATUSES: TaskStatus[] = ['paused', 'failed'];
+const M3U8_URL_RE = /https?:\/\/[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?/gi;
 let variantSelectionCountdownTimer: ReturnType<typeof setInterval> | null = null;
 let variantSelectionResolver: ((value: Record<string, M3U8StreamSelection> | null) => void) | null =
   null;
@@ -73,6 +74,7 @@ export const useAppStore = defineStore('app', {
     tmdbSearchResults: [] as TmdbSearchResult[],
     tmdbSearchLoading: false,
     tmdbSearchError: '',
+    isTmdbSearchModalOpen: false,
     selectedTmdbResult: null as TmdbSearchResult | null,
     selectedTmdbSeason: null as TmdbSeasonDetails | null,
     tmdbSeasonNumber: '1',
@@ -353,8 +355,18 @@ export const useAppStore = defineStore('app', {
         this.tmdbSearchLoading = false;
       }
     },
+    openTmdbSearchModal() {
+      this.tmdbSearchQuery = this.addTaskData.title.trim();
+      this.tmdbSearchResults = [];
+      this.tmdbSearchError = '';
+      this.isTmdbSearchModalOpen = true;
+    },
+    closeTmdbSearchModal() {
+      this.isTmdbSearchModalOpen = false;
+    },
     async selectTmdbResult(result: TmdbSearchResult) {
       this.selectedTmdbResult = result;
+      this.isTmdbSearchModalOpen = false;
       this.addTaskData.title = result.title;
       this.addTaskData.category = result.mediaType === 'movie' ? 'movie' : 'series';
       this.addTaskData.year = result.year ?? '';
@@ -479,26 +491,19 @@ export const useAppStore = defineStore('app', {
     },
     parseNamingRows(rawSubtasks: string) {
       const existingManualTitles = new Map(
-        this.namingRows.map((row) => [row.lineIndex, row.manualTitle]),
+        this.namingRows.map((row) => [row.url, row.manualTitle]),
       );
+      const urls = Array.from(rawSubtasks.matchAll(M3U8_URL_RE), (match) => match[0]);
 
-      this.namingRows = rawSubtasks
-        .split('\n')
-        .map((line, lineIndex) => ({ line: line.trim(), lineIndex }))
-        .filter(({ line }) => Boolean(line))
-        .map(({ line, lineIndex }) => {
-          const [url, ...titleParts] = line.split(/\s+/);
-          const originalTitle = titleParts.join(' ');
-          return {
-            lineIndex,
-            url,
-            originalTitle,
-            generatedTitle: this.generateRowTitle(lineIndex),
-            manualTitle: existingManualTitles.get(lineIndex) ?? originalTitle,
-            episodeNumber: this.getEpisodeNumberForRow(lineIndex),
-            episodeName: this.getEpisodeNameForRow(lineIndex),
-          };
-        });
+      this.namingRows = urls.map((url, lineIndex) => ({
+        lineIndex,
+        url,
+        originalTitle: '',
+        generatedTitle: this.generateRowTitle(lineIndex),
+        manualTitle: existingManualTitles.get(url) ?? '',
+        episodeNumber: this.getEpisodeNumberForRow(lineIndex),
+        episodeName: this.getEpisodeNameForRow(lineIndex),
+      }));
     },
     generateRowTitle(lineIndex: number) {
       if (this.addTaskData.category !== 'series') {
@@ -549,6 +554,7 @@ export const useAppStore = defineStore('app', {
       this.tmdbSearchResults = [];
       this.tmdbSearchLoading = false;
       this.tmdbSearchError = '';
+      this.isTmdbSearchModalOpen = false;
       this.selectedTmdbResult = null;
       this.selectedTmdbSeason = null;
       this.tmdbSeasonNumber = '1';
