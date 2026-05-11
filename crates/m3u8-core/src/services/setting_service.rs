@@ -41,6 +41,15 @@ impl SettingService {
         if !settings.contains_key("proxy") {
             settings.insert("proxy".to_string(), "".to_string());
         }
+        if !settings.contains_key("tmdbApiKey") {
+            settings.insert("tmdbApiKey".to_string(), "".to_string());
+        }
+        if !settings.contains_key("tmdbApiBaseUrl") {
+            settings.insert(
+                "tmdbApiBaseUrl".to_string(),
+                "https://api.themoviedb.org/3".to_string(),
+            );
+        }
         Ok(settings)
     }
 
