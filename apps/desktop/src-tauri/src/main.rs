@@ -3,7 +3,8 @@
 
 use m3u8_core::{
     init_db, probe_m3u8, DownloadService, FileService, M3U8ProbeResult, M3U8StreamSelection,
-    SettingService, Task, TaskService, TaskWithSubtasks,
+    SettingService, Task, TaskService, TaskWithSubtasks, TmdbSearchResult, TmdbSeasonDetails,
+    TmdbService,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -45,6 +46,7 @@ pub struct AppState {
     pub setting_service: Arc<SettingService>,
     pub file_service: Arc<FileService>,
     pub download_service: Arc<DownloadService>,
+    pub tmdb_service: Arc<TmdbService>,
 }
 
 #[derive(Deserialize)]
@@ -218,6 +220,31 @@ async fn create_task(
 #[tauri::command]
 async fn probe_task_m3u8(payload: ProbeM3U8Request) -> Result<M3U8ProbeResult, String> {
     probe_m3u8(&payload.url).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn search_tmdb(
+    state: State<'_, Arc<AppState>>,
+    query: String,
+) -> Result<Vec<TmdbSearchResult>, String> {
+    state
+        .tmdb_service
+        .search(&query)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_tmdb_tv_season(
+    state: State<'_, Arc<AppState>>,
+    series_id: i64,
+    season_number: i32,
+) -> Result<TmdbSeasonDetails, String> {
+    state
+        .tmdb_service
+        .tv_season(series_id, season_number)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -452,12 +479,14 @@ fn main() {
                     downloads_path,
                     true,
                 ));
+                let tmdb_service = Arc::new(TmdbService::new(setting_service.clone()));
 
                 app_handle.manage(Arc::new(AppState {
                     task_service,
                     setting_service,
                     file_service,
                     download_service,
+                    tmdb_service,
                 }));
             });
 
@@ -468,6 +497,8 @@ fn main() {
             get_task,
             create_task,
             probe_task_m3u8,
+            search_tmdb,
+            get_tmdb_tv_season,
             delete_task,
             delete_completed_tasks,
             retry_task,
