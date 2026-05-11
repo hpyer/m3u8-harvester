@@ -63,6 +63,8 @@ export interface AppSettings {
   retryDelay: string;
   userAgent: string;
   proxy: string;
+  tmdbApiKey: string;
+  tmdbApiBaseUrl: string;
   downloadPath?: string;
 }
 
@@ -122,4 +124,37 @@ export interface VariantSelectionItem {
   title: string;
   selectedIndex: number;
   probe: M3U8ProbeResult;
+}
+
+export type TmdbMediaType = 'movie' | 'tv';
+
+export interface TmdbSearchResult {
+  id: number;
+  mediaType: TmdbMediaType;
+  title: string;
+  originalTitle: string | null;
+  year: string | null;
+  seasonCount: number | null;
+}
+
+export interface TmdbEpisode {
+  episodeNumber: number;
+  name: string | null;
+  airDate: string | null;
+}
+
+export interface TmdbSeasonDetails {
+  seriesId: number;
+  seasonNumber: number;
+  episodes: TmdbEpisode[];
+}
+
+export interface M3U8NamingRow {
+  lineIndex: number;
+  url: string;
+  originalTitle: string;
+  generatedTitle: string;
+  manualTitle: string;
+  episodeNumber: number | null;
+  episodeName: string | null;
 }

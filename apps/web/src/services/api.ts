@@ -11,6 +11,8 @@ import type {
   TaskGroup,
   TaskItem,
   TaskStatus,
+  TmdbSearchResult,
+  TmdbSeasonDetails,
 } from '../types/app';
 
 const IS_TAURI = !!(window as any).__TAURI_INTERNALS__;
@@ -155,6 +157,8 @@ const parseSettingsResponse = (value: unknown): Partial<AppSettings> => {
     retryDelay: asString(value.retryDelay),
     userAgent: asString(value.userAgent),
     proxy: asString(value.proxy),
+    tmdbApiKey: asString(value.tmdbApiKey),
+    tmdbApiBaseUrl: asString(value.tmdbApiBaseUrl),
     downloadPath: asString(value.downloadPath),
   };
 };
@@ -208,6 +212,52 @@ const parseM3U8ProbeResult = (value: unknown): M3U8ProbeResult => {
   };
 };
 
+const parseTmdbSearchResults = (value: unknown): TmdbSearchResult[] =>
+  Array.isArray(value)
+    ? value
+        .map((item) => {
+          if (!isRecord(item)) return null;
+          const id = asNumber(item.id);
+          const mediaType =
+            item.mediaType === 'movie' || item.mediaType === 'tv' ? item.mediaType : null;
+          const title = asString(item.title);
+          if (!id || !mediaType || !title) return null;
+
+          return {
+            id,
+            mediaType,
+            title,
+            originalTitle: asNullableString(item.originalTitle),
+            year: asNullableString(item.year),
+            seasonCount: asNullableNumber(item.seasonCount),
+          };
+        })
+        .filter((item): item is TmdbSearchResult => item !== null)
+    : [];
+
+const parseTmdbSeasonDetails = (value: unknown): TmdbSeasonDetails => {
+  if (!isRecord(value)) {
+    return { seriesId: 0, seasonNumber: 0, episodes: [] };
+  }
+
+  return {
+    seriesId: asNumber(value.seriesId),
+    seasonNumber: asNumber(value.seasonNumber),
+    episodes: Array.isArray(value.episodes)
+      ? value.episodes
+          .map((episode) => {
+            if (!isRecord(episode)) return null;
+            return {
+              episodeNumber: asNumber(episode.episodeNumber),
+              name: asNullableString(episode.name),
+              airDate: asNullableString(episode.airDate),
+            };
+          })
+          .filter((episode): episode is TmdbSeasonDetails['episodes'][number] => episode !== null)
+      : [],
+  };
+};
+
 export interface AppApi {
   getTasks(): Promise<TaskGroup[]>;
   respondOverwrite(taskId: string, overwrite: boolean): Promise<void>;
@@ -220,6 +270,8 @@ export interface AppApi {
   saveSettings(settings: Partial<AppSettings>): Promise<void>;
   createTask(task: AddTaskPayload): Promise<void>;
   probeM3U8(url: string): Promise<M3U8ProbeResult>;
+  searchTmdb(query: string): Promise<TmdbSearchResult[]>;
+  getTmdbTvSeason(seriesId: number, seasonNumber: number): Promise<TmdbSeasonDetails>;
   deleteFile(id: string): Promise<void>;
   deleteFolder(id: string): Promise<void>;
   renameFileOrFolder(id: string, newName: string): Promise<void>;
@@ -278,6 +330,18 @@ class HttpAppApi implements AppApi {
   async probeM3U8(url: string) {
     const res = await axios.post<unknown>(`${API_BASE}/api/tasks/probe`, { url });
     return parseM3U8ProbeResult(res.data);
+  }
+
+  async searchTmdb(query: string) {
+    const res = await axios.get<unknown>(`${API_BASE}/api/tmdb/search`, { params: { query } });
+    return parseTmdbSearchResults(res.data);
+  }
+
+  async getTmdbTvSeason(seriesId: number, seasonNumber: number) {
+    const res = await axios.get<unknown>(
+      `${API_BASE}/api/tmdb/tv/${seriesId}/season/${seasonNumber}`,
+    );
+    return parseTmdbSeasonDetails(res.data);
   }
 
   async deleteFile(id: string) {
@@ -347,6 +411,19 @@ class TauriAppApi implements AppApi {
     return parseM3U8ProbeResult(data);
   }
 
+  async searchTmdb(query: string) {
+    const data = await invoke<unknown>('search_tmdb', { query });
+    return parseTmdbSearchResults(data);
+  }
+
+  async getTmdbTvSeason(seriesId: number, seasonNumber: number) {
+    const data = await invoke<unknown>('get_tmdb_tv_season', {
+      seriesId,
+      seasonNumber,
+    });
+    return parseTmdbSeasonDetails(data);
+  }
+
   async deleteFile(id: string) {
     await invoke('delete_file', { id });
   }
@@ -380,6 +457,9 @@ export const api = {
   saveSettings: (settings: Partial<AppSettings>) => apiClient.saveSettings(settings),
   createTask: (task: AddTaskPayload) => apiClient.createTask(task),
   probeM3U8: (url: string) => apiClient.probeM3U8(url),
+  searchTmdb: (query: string) => apiClient.searchTmdb(query),
+  getTmdbTvSeason: (seriesId: number, seasonNumber: number) =>
+    apiClient.getTmdbTvSeason(seriesId, seasonNumber),
   deleteFile: (id: string) => apiClient.deleteFile(id),
   deleteFolder: (id: string) => apiClient.deleteFolder(id),
   renameFileOrFolder: (id: string, newName: string) => apiClient.renameFileOrFolder(id, newName),

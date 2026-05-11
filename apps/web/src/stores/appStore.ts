@@ -23,6 +23,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   userAgent:
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   proxy: '',
+  tmdbApiKey: '',
+  tmdbApiBaseUrl: 'https://api.themoviedb.org/3',
 };
 
 const DEFAULT_VERSION_INFO: AppVersionInfo = {
@@ -333,6 +335,8 @@ export const useAppStore = defineStore('app', {
             retryDelay: String(settings.retryDelay ?? this.settings.retryDelay),
             userAgent: String(settings.userAgent ?? this.settings.userAgent),
             proxy: String(settings.proxy ?? this.settings.proxy),
+            tmdbApiKey: String(settings.tmdbApiKey ?? this.settings.tmdbApiKey),
+            tmdbApiBaseUrl: String(settings.tmdbApiBaseUrl ?? this.settings.tmdbApiBaseUrl),
             downloadPath: settings.downloadPath
               ? String(settings.downloadPath)
               : this.settings.downloadPath,
@@ -357,6 +361,8 @@ export const useAppStore = defineStore('app', {
           retryDelay: String(newSettings.retryDelay ?? this.settings.retryDelay),
           userAgent: String(newSettings.userAgent ?? this.settings.userAgent),
           proxy: String(newSettings.proxy ?? this.settings.proxy),
+          tmdbApiKey: String(newSettings.tmdbApiKey ?? this.settings.tmdbApiKey),
+          tmdbApiBaseUrl: String(newSettings.tmdbApiBaseUrl ?? this.settings.tmdbApiBaseUrl),
         };
 
         if (newSettings.downloadPath) {
