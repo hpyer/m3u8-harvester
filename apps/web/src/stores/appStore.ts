@@ -77,7 +77,6 @@ export const useAppStore = defineStore('app', {
     isTmdbSearchModalOpen: false,
     selectedTmdbResult: null as TmdbSearchResult | null,
     selectedTmdbSeason: null as TmdbSeasonDetails | null,
-    tmdbSeasonNumber: '1',
     tmdbStartEpisode: '1',
     namingRows: [] as M3U8NamingRow[],
   }),
@@ -375,7 +374,6 @@ export const useAppStore = defineStore('app', {
         if (!this.addTaskData.season) {
           this.addTaskData.season = '1';
         }
-        this.tmdbSeasonNumber = this.addTaskData.season || '1';
         await this.loadTmdbSeason();
       } else {
         this.selectedTmdbSeason = null;
@@ -389,12 +387,8 @@ export const useAppStore = defineStore('app', {
         return;
       }
 
-      const seasonNumber = Number.parseInt(
-        this.tmdbSeasonNumber || this.addTaskData.season || '1',
-        10,
-      );
+      const seasonNumber = Number.parseInt(this.addTaskData.season || '1', 10);
       const safeSeason = Number.isFinite(seasonNumber) && seasonNumber >= 0 ? seasonNumber : 1;
-      this.tmdbSeasonNumber = String(safeSeason);
       this.addTaskData.season = String(safeSeason);
 
       try {
@@ -510,7 +504,7 @@ export const useAppStore = defineStore('app', {
         return '';
       }
 
-      const season = Number.parseInt(this.tmdbSeasonNumber || this.addTaskData.season || '1', 10);
+      const season = Number.parseInt(this.addTaskData.season || '1', 10);
       const safeSeason = Number.isFinite(season) ? season : 1;
       const episode = this.getEpisodeNumberForRow(lineIndex) ?? lineIndex + 1;
       return `S${String(safeSeason).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
@@ -557,7 +551,6 @@ export const useAppStore = defineStore('app', {
       this.isTmdbSearchModalOpen = false;
       this.selectedTmdbResult = null;
       this.selectedTmdbSeason = null;
-      this.tmdbSeasonNumber = '1';
       this.tmdbStartEpisode = '1';
       this.namingRows = [];
     },

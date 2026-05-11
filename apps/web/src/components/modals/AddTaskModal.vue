@@ -76,71 +76,60 @@ const updateManualTitle = (lineIndex: number, event: Event) => {
         <label class="label">
           <span class="label-text font-bold">内容分类</span>
         </label>
-        <div class="flex gap-4">
-          <div class="join">
-            <button
-              type="button"
-              class="btn join-item"
-              :class="store.addTaskData.category === 'movie' ? 'btn-primary' : 'btn-outline'"
-              @click="setCategory('movie')"
-            >
-              电影
-            </button>
-            <button
-              type="button"
-              class="btn join-item"
-              :class="store.addTaskData.category === 'series' ? 'btn-primary' : 'btn-outline'"
-              @click="setCategory('series')"
-            >
-              剧集/综艺/动漫
-            </button>
-            <button
-              type="button"
-              class="btn join-item"
-              :class="store.addTaskData.category === 'other' ? 'btn-primary' : 'btn-outline'"
-              @click="setCategory('other')"
-            >
-              其它
-            </button>
-          </div>
-
-          <div v-if="store.addTaskData.category === 'movie'" class="flex-1">
-            <input
-              v-model="store.addTaskData.year"
-              type="text"
-              placeholder="年份，例如：2023"
-              class="input input-bordered w-full"
-            />
-          </div>
-          <div v-if="store.addTaskData.category === 'series'" class="flex-1">
-            <input
-              v-model="store.addTaskData.season"
-              type="text"
-              placeholder="季号，例如：1 (特别季填 0)"
-              class="input input-bordered w-full"
-              @input="store.updateTmdbEpisodeMapping"
-            />
-          </div>
+        <div class="join">
+          <button
+            type="button"
+            class="btn join-item"
+            :class="store.addTaskData.category === 'movie' ? 'btn-primary' : 'btn-outline'"
+            @click="setCategory('movie')"
+          >
+            电影
+          </button>
+          <button
+            type="button"
+            class="btn join-item"
+            :class="store.addTaskData.category === 'series' ? 'btn-primary' : 'btn-outline'"
+            @click="setCategory('series')"
+          >
+            剧集/综艺/动漫
+          </button>
+          <button
+            type="button"
+            class="btn join-item"
+            :class="store.addTaskData.category === 'other' ? 'btn-primary' : 'btn-outline'"
+            @click="setCategory('other')"
+          >
+            其它
+          </button>
         </div>
       </div>
 
+      <div v-if="store.addTaskData.category === 'movie'" class="form-control mt-4 md:w-1/2">
+        <label class="label pb-1"><span class="label-text font-medium">年份</span></label>
+        <input
+          v-model="store.addTaskData.year"
+          type="text"
+          placeholder="例如：2023"
+          class="input input-bordered w-full"
+        />
+      </div>
+
       <div
-        v-if="
-          store.addTaskData.category === 'series' && store.selectedTmdbResult?.mediaType === 'tv'
-        "
+        v-if="store.addTaskData.category === 'series'"
         class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3"
       >
         <div class="form-control">
-          <label class="label pb-1"><span class="label-text font-medium">TMDB 季号</span></label>
+          <label class="label pb-1"><span class="label-text font-medium">季号</span></label>
           <input
-            v-model="store.tmdbSeasonNumber"
-            type="number"
-            min="0"
+            v-model="store.addTaskData.season"
+            type="text"
+            placeholder="例如：1 (特别季填 0)"
             class="input input-bordered w-full"
             @change="store.loadTmdbSeason"
+            @input="store.updateTmdbEpisodeMapping"
           />
         </div>
-        <div class="form-control">
+        <div v-if="store.selectedTmdbResult?.mediaType === 'tv'" class="form-control">
           <label class="label pb-1"><span class="label-text font-medium">起始集</span></label>
           <input
             v-model="store.tmdbStartEpisode"
@@ -152,55 +141,57 @@ const updateManualTitle = (lineIndex: number, event: Event) => {
         </div>
       </div>
 
-      <div class="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(18rem,0.85fr)_1.35fr] gap-4">
-        <div class="form-control">
-          <label class="label">
-            <span class="label-text font-bold">子任务列表 (m3u8 链接)</span>
-            <span class="label-text-alt opacity-50 text-xs">自动提取所有 m3u8 链接</span>
-          </label>
-          <textarea
-            v-model="store.addTaskData.rawSubtasks"
-            class="textarea textarea-bordered h-28 font-mono text-xs"
-            placeholder="粘贴包含 m3u8 链接的文本，支持多行或混合内容"
-            @input="parseRows"
-          ></textarea>
-        </div>
+      <div class="form-control mt-4">
+        <label class="label">
+          <span class="label-text font-bold">子任务列表 (m3u8 链接)</span>
+          <span class="label-text-alt opacity-50 text-xs">自动提取所有 m3u8 链接</span>
+        </label>
+        <textarea
+          v-model="store.addTaskData.rawSubtasks"
+          class="textarea textarea-bordered h-28 font-mono text-xs"
+          placeholder="粘贴包含 m3u8 链接的文本，支持多行或混合内容"
+          @input="parseRows"
+        ></textarea>
+      </div>
 
-        <div class="rounded-lg border border-base-300 overflow-hidden min-h-32">
-          <div class="bg-base-200 px-3 py-2 text-sm font-semibold">
-            任务预览
-            <span v-if="store.namingRows.length" class="badge badge-neutral badge-sm ml-2">
-              {{ store.namingRows.length }}
-            </span>
-          </div>
-          <div
-            v-if="store.namingRows.length"
-            class="divide-y divide-base-300 max-h-64 overflow-y-auto"
-          >
-            <div
-              v-for="row in store.namingRows"
-              :key="row.lineIndex"
-              class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_1fr] gap-3 p-3 items-center"
-            >
-              <span class="badge badge-ghost">#{{ row.lineIndex + 1 }}</span>
-              <div class="min-w-0">
-                <p class="truncate font-mono text-xs opacity-70">{{ row.url }}</p>
-                <p v-if="row.generatedTitle" class="text-xs mt-1">
-                  建议：<span class="font-mono">{{ row.generatedTitle }}</span>
-                  <span v-if="row.episodeName" class="opacity-60"> · {{ row.episodeName }}</span>
-                </p>
-              </div>
-              <input
-                :value="row.manualTitle"
-                type="text"
-                class="input input-bordered input-sm w-full"
-                placeholder="文件标题"
-                @input="updateManualTitle(row.lineIndex, $event)"
-              />
+      <div class="mt-4">
+        <div class="form-control">
+          <div class="rounded-lg border border-base-300 overflow-hidden min-h-32">
+            <div class="bg-base-200 px-3 py-2 text-sm font-semibold">
+              任务预览
+              <span v-if="store.namingRows.length" class="badge badge-neutral badge-sm ml-2">
+                {{ store.namingRows.length }}
+              </span>
             </div>
-          </div>
-          <div v-else class="px-3 py-8 text-center text-sm opacity-50">
-            粘贴 m3u8 链接后在这里编辑文件标题。
+            <div
+              v-if="store.namingRows.length"
+              class="divide-y divide-base-300 max-h-64 overflow-y-auto"
+            >
+              <div
+                v-for="row in store.namingRows"
+                :key="row.lineIndex"
+                class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_1fr] gap-3 p-3 items-center"
+              >
+                <span class="badge badge-ghost">#{{ row.lineIndex + 1 }}</span>
+                <div class="min-w-0">
+                  <p class="truncate font-mono text-xs opacity-70">{{ row.url }}</p>
+                  <p v-if="row.generatedTitle" class="text-xs mt-1">
+                    建议：<span class="font-mono">{{ row.generatedTitle }}</span>
+                    <span v-if="row.episodeName" class="opacity-60"> · {{ row.episodeName }}</span>
+                  </p>
+                </div>
+                <input
+                  :value="row.manualTitle"
+                  type="text"
+                  class="input input-bordered input-sm w-full"
+                  placeholder="文件标题"
+                  @input="updateManualTitle(row.lineIndex, $event)"
+                />
+              </div>
+            </div>
+            <div v-else class="px-3 py-8 text-center text-sm opacity-50">
+              粘贴 m3u8 链接后在这里编辑文件标题。
+            </div>
           </div>
         </div>
       </div>
