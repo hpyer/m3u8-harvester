@@ -6,11 +6,14 @@ import type {
   AppVersionInfo,
   ConfirmationItem,
   FolderInfo,
+  M3U8NamingRow,
   M3U8StreamSelection,
   TaskCategory,
   TaskGroup,
   TaskItem,
   TaskStatus,
+  TmdbSearchResult,
+  TmdbSeasonDetails,
   VariantSelectionItem,
 } from '../types/app';
 
@@ -66,6 +69,15 @@ export const useAppStore = defineStore('app', {
     isVariantSelectionModalOpen: false,
     variantSelectionItems: [] as VariantSelectionItem[],
     variantSelectionCountdown: 30,
+    tmdbSearchQuery: '',
+    tmdbSearchResults: [] as TmdbSearchResult[],
+    tmdbSearchLoading: false,
+    tmdbSearchError: '',
+    selectedTmdbResult: null as TmdbSearchResult | null,
+    selectedTmdbSeason: null as TmdbSeasonDetails | null,
+    tmdbSeasonNumber: '1',
+    tmdbStartEpisode: '1',
+    namingRows: [] as M3U8NamingRow[],
   }),
   actions: {
     async fetchTasks() {
@@ -380,18 +392,98 @@ export const useAppStore = defineStore('app', {
     },
     async submitNewTask(task: AddTaskPayload) {
       try {
-        const streamSelections = await this.resolveStreamSelections(task.rawSubtasks);
+        const finalTask = this.rebuildRawSubtasksFromNamingRows(task);
+        const streamSelections = await this.resolveStreamSelections(finalTask.rawSubtasks);
         if (streamSelections === null) {
           return;
         }
 
-        await api.createTask({ ...task, streamSelections });
+        await api.createTask({ ...finalTask, streamSelections });
         this.isAddTaskModalOpen = false;
         this.addTaskData = createEmptyAddTaskPayload();
+        this.resetTmdbTaskHelper();
         await this.fetchTasks();
       } catch (_e) {
         alert('提交任务失败');
       }
+    },
+    parseNamingRows(rawSubtasks: string) {
+      const existingManualTitles = new Map(
+        this.namingRows.map((row) => [row.lineIndex, row.manualTitle]),
+      );
+
+      this.namingRows = rawSubtasks
+        .split('\n')
+        .map((line, lineIndex) => ({ line: line.trim(), lineIndex }))
+        .filter(({ line }) => Boolean(line))
+        .map(({ line, lineIndex }) => {
+          const [url, ...titleParts] = line.split(/\s+/);
+          const originalTitle = titleParts.join(' ');
+          return {
+            lineIndex,
+            url,
+            originalTitle,
+            generatedTitle: this.generateRowTitle(lineIndex),
+            manualTitle: existingManualTitles.get(lineIndex) ?? originalTitle,
+            episodeNumber: this.getEpisodeNumberForRow(lineIndex),
+            episodeName: this.getEpisodeNameForRow(lineIndex),
+          };
+        });
+    },
+    generateRowTitle(lineIndex: number) {
+      if (this.addTaskData.category !== 'series') {
+        return '';
+      }
+
+      const season = Number.parseInt(this.tmdbSeasonNumber || this.addTaskData.season || '1', 10);
+      const safeSeason = Number.isFinite(season) ? season : 1;
+      const episode = this.getEpisodeNumberForRow(lineIndex) ?? lineIndex + 1;
+      return `S${String(safeSeason).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+    },
+    getEpisodeNumberForRow(lineIndex: number) {
+      if (this.addTaskData.category !== 'series') return null;
+      const start = Number.parseInt(this.tmdbStartEpisode || '1', 10);
+      const safeStart = Number.isFinite(start) && start > 0 ? start : 1;
+      return safeStart + lineIndex;
+    },
+    getEpisodeNameForRow(lineIndex: number) {
+      const episodeNumber = this.getEpisodeNumberForRow(lineIndex);
+      if (!episodeNumber || !this.selectedTmdbSeason) return null;
+      return (
+        this.selectedTmdbSeason.episodes.find((episode) => episode.episodeNumber === episodeNumber)
+          ?.name ?? null
+      );
+    },
+    setNamingRowManualTitle(lineIndex: number, manualTitle: string) {
+      const row = this.namingRows.find((item) => item.lineIndex === lineIndex);
+      if (row) {
+        row.manualTitle = manualTitle;
+      }
+    },
+    rebuildRawSubtasksFromNamingRows(task: AddTaskPayload): AddTaskPayload {
+      if (this.namingRows.length === 0) {
+        return task;
+      }
+
+      const rawSubtasks = this.namingRows
+        .map((row) => {
+          const finalTitle = row.manualTitle.trim() || row.generatedTitle.trim();
+          return finalTitle ? `${row.url} ${finalTitle}` : row.url;
+        })
+        .join('\n');
+
+      return { ...task, rawSubtasks };
+    },
+    resetTmdbTaskHelper() {
+      this.tmdbSearchQuery = '';
+      this.tmdbSearchResults = [];
+      this.tmdbSearchLoading = false;
+      this.tmdbSearchError = '';
+      this.selectedTmdbResult = null;
+      this.selectedTmdbSeason = null;
+      this.tmdbSeasonNumber = '1';
+      this.tmdbStartEpisode = '1';
+      this.namingRows = [];
     },
     async resolveStreamSelections(rawSubtasks: string) {
       const lines = rawSubtasks
