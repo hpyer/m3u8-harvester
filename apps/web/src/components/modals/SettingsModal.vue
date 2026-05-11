@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia';
 import { ref, watch } from 'vue';
 import { useAppStore } from '../../stores/appStore';
 import type { AppSettings } from '../../types/app';
@@ -8,7 +7,6 @@ import CommonIcon from '../ui/CommonIcon.vue';
 import { api } from '../../services/api';
 
 const store = useAppStore();
-const { versionInfo } = storeToRefs(store);
 const localSettings = ref<AppSettings>({ ...store.settings });
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
@@ -35,174 +33,130 @@ const save = async () => {
 
 <template>
   <dialog class="modal" :class="{ 'modal-open': store.isSettingsModalOpen }">
-    <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col max-h-[90vh] overflow-hidden">
+    <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col max-h-[88vh] overflow-hidden">
       <!-- Fixed Header -->
-      <div class="px-6 py-4 border-b border-base-300 bg-base-100 shrink-0">
-        <h3 class="font-bold text-lg flex items-center gap-2">
-          <CommonIcon name="settings" class-name="h-6 w-6" />
-          应用设置
-        </h3>
+      <div class="px-5 py-3 border-b border-base-300 bg-base-100 shrink-0">
+        <h3 class="font-bold text-base">应用设置</h3>
       </div>
 
       <!-- Scrollable Content -->
-      <div class="flex-1 overflow-y-auto p-6 bg-base-50/30">
-        <div class="flex flex-col gap-5">
-          <section class="rounded-xl border border-base-300 bg-base-200/40 p-4">
-            <div class="mb-4">
-              <h4 class="font-semibold text-sm text-primary">下载配置</h4>
-              <p class="text-xs opacity-60 mt-1">
-                这些配置会保存到服务端数据库，影响下载执行行为。
-              </p>
+      <div class="flex-1 overflow-y-auto px-5 py-4 bg-base-50/30">
+        <div class="flex flex-col gap-3">
+          <section class="rounded-xl border border-base-300 bg-base-200/40 p-3">
+            <div class="mb-3">
+              <h4 class="font-semibold text-xs text-primary">下载配置</h4>
             </div>
 
-            <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-3">
               <div v-if="isTauri" class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">下载目录</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">下载目录</span></label
                 >
                 <div class="join">
                   <input
                     v-model="localSettings.downloadPath"
                     type="text"
                     readonly
-                    class="input input-bordered w-full join-item bg-base-100 text-sm"
+                    class="input input-bordered input-sm w-full join-item bg-base-100"
                     placeholder="选择下载保存目录"
                   />
-                  <button class="btn btn-primary join-item" @click="selectDirectory">
-                    <CommonIcon name="folder" class-name="h-4 w-4" />
+                  <button class="btn btn-primary btn-sm join-item" @click="selectDirectory">
+                    <CommonIcon name="folder" class-name="h-3.5 w-3.5" />
                     选择
                   </button>
                 </div>
-                <p class="text-[10px] mt-1.5 opacity-50 px-1 italic">
-                  修改下载目录后，临时文件将存放在该目录下的 .temp 文件夹中。
-                </p>
               </div>
 
               <div class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">并发下载数</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">并发下载数</span></label
                 >
                 <input
                   v-model="localSettings.concurrency"
                   type="number"
                   min="1"
-                  class="input input-bordered w-full"
+                  class="input input-bordered input-sm w-full"
                 />
               </div>
 
               <div class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">分片重试次数</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">分片重试次数</span></label
                 >
                 <input
                   v-model="localSettings.retryCount"
                   type="number"
                   min="1"
-                  class="input input-bordered w-full"
+                  class="input input-bordered input-sm w-full"
                 />
               </div>
 
               <div class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">重试间隔 (毫秒)</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">重试间隔 (毫秒)</span></label
                 >
                 <input
                   v-model="localSettings.retryDelay"
                   type="number"
                   min="0"
-                  class="input input-bordered w-full"
+                  class="input input-bordered input-sm w-full"
                 />
               </div>
 
               <div class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">User-Agent</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">User-Agent</span></label
                 >
                 <textarea
                   v-model="localSettings.userAgent"
-                  rows="3"
+                  rows="2"
                   class="textarea textarea-bordered w-full text-xs"
                 />
               </div>
 
               <div class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">代理服务器</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">代理服务器</span></label
                 >
                 <input
                   v-model="localSettings.proxy"
                   type="text"
                   placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890"
-                  class="input input-bordered w-full"
+                  class="input input-bordered input-sm w-full"
                 />
               </div>
             </div>
           </section>
 
-          <section class="rounded-xl border border-base-300 bg-base-100 p-4">
-            <div class="mb-4">
-              <h4 class="font-semibold text-sm text-primary">TMDB 配置</h4>
-              <p class="text-xs opacity-60 mt-1">
-                用于新建任务时搜索电影和剧集信息，只辅助填表和命名。
-              </p>
+          <section class="rounded-xl border border-base-300 bg-base-100 p-3">
+            <div class="mb-3">
+              <h4 class="font-semibold text-xs text-primary">TMDB 配置</h4>
             </div>
 
-            <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-3">
               <div class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">TMDB API Key</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">TMDB API Key</span></label
                 >
                 <input
                   v-model="localSettings.tmdbApiKey"
                   type="password"
                   autocomplete="off"
-                  class="input input-bordered w-full"
+                  class="input input-bordered input-sm w-full"
                   placeholder="在 TMDB 账户设置中获取 API Key"
                 />
               </div>
 
               <div class="form-control">
-                <label class="label pb-1"
-                  ><span class="label-text font-medium">TMDB API 地址</span></label
+                <label class="label py-1"
+                  ><span class="label-text font-medium text-xs">TMDB API 地址</span></label
                 >
                 <input
                   v-model="localSettings.tmdbApiBaseUrl"
                   type="text"
-                  class="input input-bordered w-full"
+                  class="input input-bordered input-sm w-full"
                   placeholder="https://api.themoviedb.org/3"
                 />
-              </div>
-            </div>
-          </section>
-
-          <section class="rounded-xl border border-base-300 bg-base-100 p-4">
-            <div class="mb-4">
-              <h4 class="font-semibold text-sm text-primary">版本信息</h4>
-              <p class="text-xs opacity-60 mt-1">构建元数据单独展示，不再混入下载设置。</p>
-            </div>
-
-            <div class="grid gap-2 text-sm">
-              <div
-                class="flex items-center justify-between gap-4 rounded-lg bg-base-200/60 px-3 py-2"
-              >
-                <span class="opacity-70">Docker 镜像</span>
-                <span class="text-right font-mono text-xs"
-                  >{{ versionInfo.dockerImage }}:{{ versionInfo.dockerVersion }}</span
-                >
-              </div>
-              <div
-                class="flex items-center justify-between gap-4 rounded-lg bg-base-200/60 px-3 py-2"
-              >
-                <span class="opacity-70">应用版本</span>
-                <span class="font-mono text-xs">v{{ versionInfo.appVersion }}</span>
-              </div>
-              <div
-                class="flex items-center justify-between gap-4 rounded-lg bg-base-200/60 px-3 py-2"
-              >
-                <span class="opacity-70">Tauri</span>
-                <span class="font-mono text-xs">{{
-                  versionInfo.tauriVersion ? `v${versionInfo.tauriVersion}` : '未接入'
-                }}</span>
               </div>
             </div>
           </section>
@@ -210,9 +164,11 @@ const save = async () => {
       </div>
 
       <!-- Fixed Footer -->
-      <div class="px-6 py-4 border-t border-base-300 bg-base-100 flex justify-end gap-3 shrink-0">
-        <button class="btn btn-ghost" @click="store.isSettingsModalOpen = false">取消</button>
-        <button class="btn btn-primary px-8" @click="save">保存配置</button>
+      <div class="px-5 py-3 border-t border-base-300 bg-base-100 flex justify-end gap-2 shrink-0">
+        <button class="btn btn-ghost btn-sm" @click="store.isSettingsModalOpen = false">
+          取消
+        </button>
+        <button class="btn btn-primary btn-sm px-6" @click="save">保存配置</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop" @click="store.isSettingsModalOpen = false">
