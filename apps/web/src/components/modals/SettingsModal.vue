@@ -141,6 +141,42 @@ const save = async () => {
 
           <section class="rounded-xl border border-base-300 bg-base-100 p-4">
             <div class="mb-4">
+              <h4 class="font-semibold text-sm text-primary">TMDB 配置</h4>
+              <p class="text-xs opacity-60 mt-1">
+                用于新建任务时搜索电影和剧集信息，只辅助填表和命名。
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-4">
+              <div class="form-control">
+                <label class="label pb-1"
+                  ><span class="label-text font-medium">TMDB API Key</span></label
+                >
+                <input
+                  v-model="localSettings.tmdbApiKey"
+                  type="password"
+                  autocomplete="off"
+                  class="input input-bordered w-full"
+                  placeholder="在 TMDB 账户设置中获取 API Key"
+                />
+              </div>
+
+              <div class="form-control">
+                <label class="label pb-1"
+                  ><span class="label-text font-medium">TMDB API 地址</span></label
+                >
+                <input
+                  v-model="localSettings.tmdbApiBaseUrl"
+                  type="text"
+                  class="input input-bordered w-full"
+                  placeholder="https://api.themoviedb.org/3"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-base-300 bg-base-100 p-4">
+            <div class="mb-4">
               <h4 class="font-semibold text-sm text-primary">版本信息</h4>
               <p class="text-xs opacity-60 mt-1">构建元数据单独展示，不再混入下载设置。</p>
             </div>
