@@ -17,6 +17,7 @@ This file gives coding agents the minimum project-specific context needed to mak
 - `apps/server`
   - Rust HTTP server entrypoint
   - Axum handlers and server-side orchestration
+  - Includes `tmdb_handler` for TMDB API proxy endpoints
   - Uses `m3u8-core` services for task, settings, file, and download workflows
 - `apps/desktop`
   - Tauri 2 desktop app
@@ -26,10 +27,10 @@ This file gives coding agents the minimum project-specific context needed to mak
   - Shared domain crate
   - Database models and services
   - File tree and download workflow logic
-  - Downloader, merger, and M3U8 parsing utilities
+  - Downloader, merger, M3U8 parsing utilities, and TMDB API service
 - `apps/web`
   - Vue 3 SPA
-  - Task management UI and local file browser
+  - Task management UI, local file browser, and TMDB-powered task creation UI
 - `storage`
   - Runtime data directory
   - `storage/db`: SQLite database
@@ -60,6 +61,8 @@ This file gives coding agents the minimum project-specific context needed to mak
   - M3U8 probe, master/media playlist parsing, variant and audio-rendition selection
 - `crates/m3u8-core/src/utils/merger.rs`
   - FFmpeg merge integration
+- `crates/m3u8-core/src/services/tmdb_service.rs`
+  - TMDB API client (search movie/TV, fetch season details)
 - `apps/web/src/components/features/TaskList.vue`
   - main task list UI
 - `apps/web/src/components/features/LocalFiles.vue`
@@ -69,7 +72,9 @@ This file gives coding agents the minimum project-specific context needed to mak
 - `apps/web/src/services/api.ts`
   - frontend API client
 - `apps/web/src/components/modals/AddTaskModal.vue`
-  - task creation entry modal
+  - task creation entry modal with TMDB search, category selection, season/episode inputs, and naming row preview
+- `apps/web/src/components/modals/SettingsModal.vue`
+  - app settings dialog (download config, TMDB config)
 - `apps/web/src/components/modals/VariantSelectionModal.vue`
   - master playlist resolution selection modal with auto-continue countdown
 
@@ -192,6 +197,28 @@ Do not assume a commit will pass if local format or lint has not been run.
 
 ## Change Guidance
 
+### When changing TMDB integration
+
+The TMDB feature spans backend service, HTTP/desktop endpoints, and frontend UI.
+
+Check together:
+
+- `crates/m3u8-core/src/services/tmdb_service.rs`
+- `apps/server/src/handlers/tmdb_handler.rs`
+- `apps/desktop/src-tauri/src/main.rs`
+- `apps/web/src/services/api.ts`
+- `apps/web/src/stores/appStore.ts`
+- `apps/web/src/types/app.ts`
+- `apps/web/src/components/modals/AddTaskModal.vue`
+- `apps/web/src/components/modals/SettingsModal.vue` (TMDB key/base URL settings)
+
+Validate with:
+
+```bash
+cargo test -p m3u8-server
+pnpm --filter @m3u8-harvester/web build
+```
+
 ### When changing backend download behavior
 
 Also inspect:
@@ -282,6 +309,10 @@ If types or payload shape changed, re-check backend endpoints too.
 - The web frontend must work in both HTTP mode and Tauri mode; keep `apps/web/src/services/api.ts` aligned with both Axum endpoints and Tauri commands when API shape changes.
 - Keep responses and labels in Chinese if matching surrounding UI/content.
 - Avoid unnecessary renames or structural refactors in Rust modules unless the task requires them.
+- TMDB integration uses the frontend as API proxy: the browser calls the backend proxy, and desktop calls Tauri commands. Both route to `tmdb_service.rs`.
+- The naming row system (`M3U8NamingRow[]`) replaces bare URL textarea parsing. When submitting a task, `rebuildRawSubtasksFromNamingRows` reconstructs the final subtask string from editable naming rows.
+- Task creation follows this flow: category selection → (optional) TMDB auto-fill → paste m3u8 links → preview/rename rows → submit.
+- For TV series, the naming row preview auto-generates `SxxExx` titles with TMDB episode names; users can override individual titles manually.
 
 ## Good Final Verification Sets
 
