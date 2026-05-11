@@ -2,3 +2,4 @@ pub mod file_handler;
 pub mod meta_handler;
 pub mod setting_handler;
 pub mod task_handler;
+pub mod tmdb_handler;

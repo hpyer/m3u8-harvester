@@ -2,7 +2,7 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
-use m3u8_core::{init_db, DownloadService, FileService, SettingService, TaskService};
+use m3u8_core::{init_db, DownloadService, FileService, SettingService, TaskService, TmdbService};
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +19,7 @@ pub struct AppState {
     pub setting_service: Arc<SettingService>,
     pub file_service: Arc<FileService>,
     pub download_service: Arc<DownloadService>,
+    pub tmdb_service: Arc<TmdbService>,
 }
 
 #[tokio::main]
@@ -66,12 +67,14 @@ async fn main() {
         downloads_path,
         false,
     ));
+    let tmdb_service = Arc::new(TmdbService::new(setting_service.clone()));
 
     let state = Arc::new(AppState {
         task_service,
         setting_service,
         file_service,
         download_service,
+        tmdb_service,
     });
 
     // 静态文件目录
@@ -118,6 +121,11 @@ async fn main() {
         .route(
             "/api/meta/version",
             get(handlers::meta_handler::get_app_version),
+        )
+        .route("/api/tmdb/search", get(handlers::tmdb_handler::search_tmdb))
+        .route(
+            "/api/tmdb/tv/:series_id/season/:season_number",
+            get(handlers::tmdb_handler::get_tmdb_tv_season),
         )
         .route("/api/files", get(handlers::file_handler::list_files))
         .route(
