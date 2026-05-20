@@ -1,7 +1,7 @@
 use crate::utils::m3u8::SegmentInfo;
 use anyhow::{anyhow, Context, Result};
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::fs as tfs;
 use tracing::info;
 
@@ -116,9 +116,9 @@ fn build_local_playlist(segments: &[SegmentInfo]) -> String {
     content
 }
 
-fn resolve_ffmpeg_path() -> Result<std::path::PathBuf> {
+fn resolve_ffmpeg_path() -> Result<PathBuf> {
     if let Some(path) = env::var_os("FFMPEG_PATH") {
-        let path = std::path::PathBuf::from(path);
+        let path = PathBuf::from(path);
         if path.is_file() {
             return Ok(path);
         }
@@ -128,9 +128,129 @@ fn resolve_ffmpeg_path() -> Result<std::path::PathBuf> {
         ));
     }
 
-    which::which("ffmpeg").map_err(|_| {
-        anyhow!(
-            "FFmpeg executable not found. Install ffmpeg and make sure it is in PATH, or set FFMPEG_PATH to the absolute ffmpeg binary path."
-        )
-    })
+    if let Ok(path) = which::which("ffmpeg") {
+        return Ok(path);
+    }
+
+    for candidate in fallback_ffmpeg_candidates() {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(anyhow!(
+        "FFmpeg executable not found. Install ffmpeg and make sure it is in PATH, or set FFMPEG_PATH to the absolute ffmpeg binary path."
+    ))
+}
+
+fn fallback_ffmpeg_candidates() -> Vec<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        vec![
+            PathBuf::from("/opt/homebrew/bin/ffmpeg"),
+            PathBuf::from("/usr/local/bin/ffmpeg"),
+        ]
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        vec![
+            PathBuf::from("/usr/bin/ffmpeg"),
+            PathBuf::from("/usr/local/bin/ffmpeg"),
+            PathBuf::from("/snap/bin/ffmpeg"),
+        ]
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let mut candidates = vec![
+            PathBuf::from(r"C:\ffmpeg\bin\ffmpeg.exe"),
+            PathBuf::from(r"C:\ProgramData\chocolatey\bin\ffmpeg.exe"),
+        ];
+
+        if let Some(program_files) = env::var_os("ProgramFiles") {
+            candidates.push(
+                PathBuf::from(program_files)
+                    .join("ffmpeg")
+                    .join("bin")
+                    .join("ffmpeg.exe"),
+            );
+        }
+
+        if let Some(program_files_x86) = env::var_os("ProgramFiles(x86)") {
+            candidates.push(
+                PathBuf::from(program_files_x86)
+                    .join("ffmpeg")
+                    .join("bin")
+                    .join("ffmpeg.exe"),
+            );
+        }
+
+        if let Some(choco_install) = env::var_os("ChocolateyInstall") {
+            candidates.push(PathBuf::from(choco_install).join("bin").join("ffmpeg.exe"));
+        }
+
+        if let Some(user_profile) = env::var_os("USERPROFILE") {
+            candidates.push(
+                PathBuf::from(&user_profile)
+                    .join("scoop")
+                    .join("shims")
+                    .join("ffmpeg.exe"),
+            );
+        }
+
+        if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+            candidates.push(
+                PathBuf::from(local_app_data)
+                    .join("Microsoft")
+                    .join("WinGet")
+                    .join("Links")
+                    .join("ffmpeg.exe"),
+            );
+        }
+
+        candidates
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fallback_ffmpeg_candidates;
+    use std::path::PathBuf;
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn includes_common_homebrew_ffmpeg_locations_on_macos() {
+        let candidates = fallback_ffmpeg_candidates();
+        assert!(candidates.contains(&PathBuf::from("/opt/homebrew/bin/ffmpeg")));
+        assert!(candidates.contains(&PathBuf::from("/usr/local/bin/ffmpeg")));
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn includes_common_system_locations_on_linux() {
+        let candidates = fallback_ffmpeg_candidates();
+        assert!(candidates.contains(&PathBuf::from("/usr/bin/ffmpeg")));
+        assert!(candidates.contains(&PathBuf::from("/usr/local/bin/ffmpeg")));
+        assert!(candidates.contains(&PathBuf::from("/snap/bin/ffmpeg")));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn includes_common_install_locations_on_windows() {
+        let candidates = fallback_ffmpeg_candidates();
+        assert!(candidates.contains(&PathBuf::from(r"C:\ffmpeg\bin\ffmpeg.exe")));
+        assert!(candidates.contains(&PathBuf::from(r"C:\ProgramData\chocolatey\bin\ffmpeg.exe")));
+    }
+
+    #[test]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    fn has_no_platform_fallbacks_for_unknown_targets() {
+        assert!(fallback_ffmpeg_candidates().is_empty());
+    }
 }
