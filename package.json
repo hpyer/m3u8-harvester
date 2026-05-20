@@ -1,6 +1,5 @@
 {
   "name": "m3u8-harvester",
-  "version": "1.2.0",
   "private": true,
   "packageManager": "pnpm@10.23.0",
   "scripts": {
@@ -19,6 +18,8 @@
     "format:web": "prettier --write .",
     "format:rust": "cargo fmt --all",
     "format": "pnpm format:web && pnpm format:rust",
+    "version:get": "node scripts/version.mjs get",
+    "version:set": "node scripts/version.mjs set",
     "prepare": "husky"
   },
   "lint-staged": {

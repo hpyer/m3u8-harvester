@@ -36,6 +36,12 @@ jobs:
           release_ref="${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}"
           release_tag="${release_ref#refs/tags/}"
 
+          workspace_version="$(awk -F'"' '
+            /^\[workspace\.package\]$/ { in_workspace_package = 1; next }
+            /^\[/ && $0 != "[workspace.package]" { in_workspace_package = 0 }
+            in_workspace_package && /^version = "/ { print $2; exit }
+          ' Cargo.toml)"
+
           if [[ "$release_tag" != v* ]]; then
             echo "::error::Desktop release requires a v* tag, got $release_ref."
             exit 1
@@ -59,9 +65,13 @@ jobs:
           fi
 
           tag_version="${release_tag#v}"
-          app_version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
-          if [[ "$tag_version" != "$app_version" ]]; then
-            echo "::error::Tag version $tag_version does not match Tauri app version $app_version."
+          if [[ -z "$workspace_version" ]]; then
+            echo "::error::Failed to read workspace version from Cargo.toml."
+            exit 1
+          fi
+
+          if [[ "$tag_version" != "$workspace_version" ]]; then
+            echo "::error::Tag version $tag_version does not match workspace version $workspace_version."
             exit 1
           fi
 
@@ -157,7 +167,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          version="$(awk -F'"' '
+            /^\[workspace\.package\]$/ { in_workspace_package = 1; next }
+            /^\[/ && $0 != "[workspace.package]" { in_workspace_package = 0 }
+            in_workspace_package && /^version = "/ { print $2; exit }
+          ' Cargo.toml)"
+
+          if [[ -z "$version" ]]; then
+            echo "::error::Failed to read workspace version from Cargo.toml."
+            exit 1
+          fi
+
           mkdir -p release-assets
 
           if [[ -d "${{ matrix.bundle-path }}" ]]; then

@@ -79,6 +79,18 @@ docker-compose up -d
 - 推送 `v*` 标签时自动发布对应版本标签
 - `pull_request` 到 `main` 时只执行构建，不推送镜像
 
+版本号统一由根目录 [Cargo.toml](/Users/hpyer/workspace/hpyer/m3u8-harvester/Cargo.toml) 的 `[workspace.package].version` 管理。
+
+发布前可使用：
+
+```bash
+pnpm version:get
+pnpm version:set 1.2.1
+git tag v1.2.1
+```
+
+桌面端 Tauri 配置和 Rust 包版本会自动继承这个版本，GitHub Release 工作流也会校验 tag 与该版本一致。
+
 默认发布地址：
 
 ```text
