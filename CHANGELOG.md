@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
+## [1.2.1] - 2026-05-20
+
+### Changed
+
+- Centralized release version management to the root workspace version in `Cargo.toml`, with desktop release checks and local version bump commands reading from the same source.
+
+### Fixed
+
+- Fixed FFmpeg executable detection by adding fallback lookup paths for common macOS, Linux, and Windows installations when `PATH` lookup fails.
+
 ## [1.2.0] - 2026-05-11
 
 ### Added
