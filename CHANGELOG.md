@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
+## [1.2.2] - 2026-07-09
+
+### Changed
+
+- Reused the existing Master Playlist selection flow for single-variant playlists so users can confirm the concrete stream even when only one quality is available.
+- Added change detection for web and desktop icon generation to avoid rewriting unchanged icon files during local development.
+
+### Fixed
+
+- Fixed M3U8 probing and parsing to use configured User-Agent and proxy settings consistently across HTTP server and Tauri desktop modes.
+- Improved M3U8 parse errors with HTTP status, content type, and response preview details for easier diagnosis.
+- Fixed direct retry/download of Master Playlists that contain exactly one downloadable variant by automatically following that concrete media playlist.
+
 ## [1.2.1] - 2026-05-20
 
 ### Changed
