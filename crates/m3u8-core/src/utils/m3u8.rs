@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use m3u8_rs::{AlternativeMediaType, KeyMethod, Playlist};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -83,6 +83,31 @@ pub struct M3U8StreamSelection {
     pub audio_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct M3U8RequestOptions {
+    pub user_agent: Option<String>,
+    pub proxy: Option<String>,
+}
+
+impl M3U8RequestOptions {
+    pub fn from_settings(
+        settings: &HashMap<String, String>,
+        default_user_agent: impl Into<String>,
+    ) -> Self {
+        Self {
+            user_agent: settings
+                .get("userAgent")
+                .filter(|value| !value.trim().is_empty())
+                .cloned()
+                .or_else(|| Some(default_user_agent.into())),
+            proxy: settings
+                .get("proxy")
+                .filter(|value| !value.trim().is_empty())
+                .cloned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SegmentInfo {
     pub url: String,
@@ -106,15 +131,29 @@ pub struct InitMapInfo {
 }
 
 pub async fn parse_m3u8(m3u8_url: &str) -> Result<M3U8Info> {
-    let client = build_client()?;
+    parse_m3u8_with_options(m3u8_url, &M3U8RequestOptions::default()).await
+}
+
+pub async fn parse_m3u8_with_options(
+    m3u8_url: &str,
+    options: &M3U8RequestOptions,
+) -> Result<M3U8Info> {
+    let client = build_client(options)?;
     parse_media_playlist_with_client(&client, m3u8_url).await
 }
 
 pub async fn probe_m3u8(m3u8_url: &str) -> Result<M3U8ProbeResult> {
-    let client = build_client()?;
-    let response = client.get(m3u8_url).send().await?.text().await?;
+    probe_m3u8_with_options(m3u8_url, &M3U8RequestOptions::default()).await
+}
 
-    match m3u8_rs::parse_playlist_res(response.as_bytes()) {
+pub async fn probe_m3u8_with_options(
+    m3u8_url: &str,
+    options: &M3U8RequestOptions,
+) -> Result<M3U8ProbeResult> {
+    let client = build_client(options)?;
+    let response = fetch_playlist_text(&client, m3u8_url).await?;
+
+    match m3u8_rs::parse_playlist_res(response.body.as_bytes()) {
         Ok(Playlist::MediaPlaylist(_)) => Ok(M3U8ProbeResult {
             is_master: false,
             default_variant_index: None,
@@ -184,12 +223,19 @@ pub async fn probe_m3u8(m3u8_url: &str) -> Result<M3U8ProbeResult> {
                 variants,
             })
         }
-        _ => Err(anyhow!("无法解析该 M3U8 文件")),
+        _ => Err(parse_playlist_error(&response)),
     }
 }
 
 pub async fn parse_download_source(input: &str) -> Result<DownloadSource> {
-    let client = build_client()?;
+    parse_download_source_with_options(input, &M3U8RequestOptions::default()).await
+}
+
+pub async fn parse_download_source_with_options(
+    input: &str,
+    options: &M3U8RequestOptions,
+) -> Result<DownloadSource> {
+    let client = build_client(options)?;
 
     if let Ok(selection) = serde_json::from_str::<M3U8StreamSelection>(input) {
         let video = prefix_m3u8_info(
@@ -211,16 +257,32 @@ pub async fn parse_download_source(input: &str) -> Result<DownloadSource> {
     Ok(DownloadSource { video, audio: None })
 }
 
-fn build_client() -> Result<Client> {
-    Ok(Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()?)
+fn build_client(options: &M3U8RequestOptions) -> Result<Client> {
+    let mut builder = Client::builder().timeout(std::time::Duration::from_secs(10));
+
+    if let Some(user_agent) = options
+        .user_agent
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        builder = builder.user_agent(user_agent);
+    }
+
+    if let Some(proxy_url) = options
+        .proxy
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        builder = builder.proxy(reqwest::Proxy::all(proxy_url)?);
+    }
+
+    Ok(builder.build()?)
 }
 
 async fn parse_media_playlist_with_client(client: &Client, m3u8_url: &str) -> Result<M3U8Info> {
-    let response = client.get(m3u8_url).send().await?.text().await?;
+    let response = fetch_playlist_text(client, m3u8_url).await?;
 
-    match m3u8_rs::parse_playlist_res(response.as_bytes()) {
+    match m3u8_rs::parse_playlist_res(response.body.as_bytes()) {
         Ok(Playlist::MediaPlaylist(playlist)) => {
             let base_url = Url::parse(m3u8_url)?;
             let mut full_segments = Vec::new();
@@ -270,7 +332,66 @@ async fn parse_media_playlist_with_client(client: &Client, m3u8_url: &str) -> Re
         Ok(Playlist::MasterPlaylist(_)) => Err(anyhow!(
             "目前暂不支持直接下载 Master Playlist，请先选择具体清晰度"
         )),
-        _ => Err(anyhow!("无法解析该 M3U8 文件")),
+        _ => Err(parse_playlist_error(&response)),
+    }
+}
+
+struct PlaylistResponse {
+    body: String,
+    content_type: String,
+}
+
+async fn fetch_playlist_text(client: &Client, m3u8_url: &str) -> Result<PlaylistResponse> {
+    let response = client
+        .get(m3u8_url)
+        .send()
+        .await
+        .with_context(|| format!("请求 M3U8 失败: {m3u8_url}"))?;
+    let status = response.status();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
+        .unwrap_or_else(|| "unknown".to_string());
+
+    if !status.is_success() {
+        return Err(anyhow!(
+            "请求 M3U8 返回 HTTP {}，Content-Type: {}",
+            status,
+            content_type
+        ));
+    }
+
+    let body = response
+        .text()
+        .await
+        .with_context(|| format!("读取 M3U8 响应失败，Content-Type: {content_type}"))?;
+
+    Ok(PlaylistResponse { body, content_type })
+}
+
+fn parse_playlist_error(response: &PlaylistResponse) -> anyhow::Error {
+    let preview = response
+        .body
+        .chars()
+        .take(240)
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if preview.is_empty() {
+        anyhow!(
+            "无法解析该 M3U8 文件：响应内容为空，Content-Type: {}",
+            response.content_type
+        )
+    } else {
+        anyhow!(
+            "无法解析该 M3U8 文件：Content-Type: {}，响应开头为「{}」",
+            response.content_type,
+            preview
+        )
     }
 }
 

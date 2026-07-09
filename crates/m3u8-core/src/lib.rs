@@ -16,7 +16,8 @@ pub use services::tmdb_service::{
     TmdbEpisode, TmdbMediaType, TmdbSearchResult, TmdbSeasonDetails, TmdbService,
 };
 pub use utils::m3u8::{
-    parse_download_source, parse_m3u8, probe_m3u8, DownloadSource, InitMapInfo, M3U8Info,
-    M3U8ProbeResult, M3U8StreamSelection, M3U8VariantOption, SegmentInfo,
+    parse_download_source, parse_download_source_with_options, parse_m3u8, parse_m3u8_with_options,
+    probe_m3u8, probe_m3u8_with_options, DownloadSource, InitMapInfo, M3U8Info, M3U8ProbeResult,
+    M3U8RequestOptions, M3U8StreamSelection, M3U8VariantOption, SegmentInfo,
 };
 pub use utils::merger::VideoMerger;

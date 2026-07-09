@@ -1,7 +1,7 @@
 use crate::core::downloader::{DownloadOptions, DownloadProgress, Downloader};
 use crate::services::setting_service::SettingService;
 use crate::services::task_service::TaskService;
-use crate::utils::m3u8::parse_download_source;
+use crate::utils::m3u8::{parse_download_source_with_options, M3U8RequestOptions};
 use crate::utils::merger::VideoMerger;
 use regex::Regex;
 use std::sync::OnceLock;
@@ -250,7 +250,10 @@ impl DownloadService {
         // 1. 解析 M3U8
         // ... (parsing logic remains same)
         task_service.update_task_status(&task_id, "parsing").await?;
-        let download_source = parse_download_source(&m3u8_url).await?;
+        let request_options =
+            M3U8RequestOptions::from_settings(&settings, DownloadOptions::default().user_agent);
+        let download_source =
+            parse_download_source_with_options(&m3u8_url, &request_options).await?;
 
         // 更新总分片数和预计大小
         task_service

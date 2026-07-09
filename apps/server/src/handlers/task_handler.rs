@@ -5,7 +5,10 @@ use axum::{
     Json,
 };
 use lazy_static::lazy_static;
-use m3u8_core::{probe_m3u8, M3U8ProbeResult, M3U8StreamSelection, Task, TaskWithSubtasks};
+use m3u8_core::{
+    probe_m3u8_with_options, DownloadOptions, M3U8ProbeResult, M3U8RequestOptions,
+    M3U8StreamSelection, Task, TaskWithSubtasks,
+};
 use regex::Regex;
 use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
@@ -58,9 +61,18 @@ pub struct OverwriteResponse {
 }
 
 pub async fn probe_task_m3u8(
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<ProbeM3U8Request>,
 ) -> Result<Json<M3U8ProbeResult>, (StatusCode, String)> {
-    probe_m3u8(&payload.url)
+    let settings = state
+        .setting_service
+        .get_all()
+        .await
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    let options =
+        M3U8RequestOptions::from_settings(&settings, DownloadOptions::default().user_agent);
+
+    probe_m3u8_with_options(&payload.url, &options)
         .await
         .map(Json)
         .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()))

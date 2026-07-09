@@ -2,9 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use m3u8_core::{
-    init_db, probe_m3u8, DownloadService, FileService, M3U8ProbeResult, M3U8StreamSelection,
-    SettingService, Task, TaskService, TaskWithSubtasks, TmdbSearchResult, TmdbSeasonDetails,
-    TmdbService,
+    init_db, probe_m3u8_with_options, DownloadOptions, DownloadService, FileService,
+    M3U8ProbeResult, M3U8RequestOptions, M3U8StreamSelection, SettingService, Task, TaskService,
+    TaskWithSubtasks, TmdbSearchResult, TmdbSeasonDetails, TmdbService,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -218,8 +218,21 @@ async fn create_task(
 }
 
 #[tauri::command]
-async fn probe_task_m3u8(payload: ProbeM3U8Request) -> Result<M3U8ProbeResult, String> {
-    probe_m3u8(&payload.url).await.map_err(|e| e.to_string())
+async fn probe_task_m3u8(
+    state: State<'_, Arc<AppState>>,
+    payload: ProbeM3U8Request,
+) -> Result<M3U8ProbeResult, String> {
+    let settings = state
+        .setting_service
+        .get_all()
+        .await
+        .map_err(|e| e.to_string())?;
+    let options =
+        M3U8RequestOptions::from_settings(&settings, DownloadOptions::default().user_agent);
+
+    probe_m3u8_with_options(&payload.url, &options)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
