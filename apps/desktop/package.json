@@ -3,8 +3,8 @@
   "private": true,
   "scripts": {
     "tauri": "tauri",
-    "icon": "tauri icon src-tauri/icons/icon.png -o src-tauri/icons",
-    "dev": "pnpm --workspace-root icon:web && pnpm icon && tauri dev",
+    "icon": "node ../../scripts/icons.mjs desktop",
+    "dev": "pnpm icon && pnpm --workspace-root icon:web && tauri dev",
     "build": "tauri build"
   },
   "devDependencies": {
