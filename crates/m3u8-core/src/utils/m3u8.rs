@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use m3u8_rs::{AlternativeMediaType, KeyMethod, Playlist};
+use m3u8_rs::{AlternativeMediaType, KeyMethod, MasterPlaylist, MediaPlaylist, Playlist};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -160,57 +160,7 @@ pub async fn probe_m3u8_with_options(
             variants: Vec::new(),
         }),
         Ok(Playlist::MasterPlaylist(playlist)) => {
-            let base_url = Url::parse(m3u8_url)?;
-            let mut variants = Vec::new();
-
-            for variant in playlist.variants {
-                if variant.is_i_frame {
-                    continue;
-                }
-
-                let video_url = base_url.join(&variant.uri)?.to_string();
-                let audio_rendition = variant.audio.as_ref().and_then(|group_id| {
-                    playlist
-                        .alternatives
-                        .iter()
-                        .filter(|media| {
-                            media.media_type == AlternativeMediaType::Audio
-                                && media.group_id == *group_id
-                                && media.uri.is_some()
-                        })
-                        .max_by_key(|media| {
-                            let default_score = if media.default {
-                                2
-                            } else if media.autoselect {
-                                1
-                            } else {
-                                0
-                            };
-                            (default_score, media.name.clone())
-                        })
-                });
-
-                let audio_url = audio_rendition
-                    .and_then(|media| media.uri.as_deref())
-                    .map(|uri| base_url.join(uri))
-                    .transpose()?
-                    .map(|url| url.to_string());
-
-                variants.push(M3U8VariantOption {
-                    video_url,
-                    audio_url,
-                    resolution: variant
-                        .resolution
-                        .as_ref()
-                        .map(|resolution| format!("{}x{}", resolution.width, resolution.height)),
-                    bandwidth: variant.bandwidth,
-                    average_bandwidth: variant.average_bandwidth,
-                    codecs: variant.codecs.clone(),
-                    audio_name: audio_rendition.map(|media| media.name.clone()),
-                    has_separate_audio: audio_rendition.is_some(),
-                });
-            }
-
+            let variants = collect_variant_options(playlist, m3u8_url)?;
             let default_variant_index = variants
                 .iter()
                 .enumerate()
@@ -238,23 +188,10 @@ pub async fn parse_download_source_with_options(
     let client = build_client(options)?;
 
     if let Ok(selection) = serde_json::from_str::<M3U8StreamSelection>(input) {
-        let video = prefix_m3u8_info(
-            parse_media_playlist_with_client(&client, &selection.video_url).await?,
-            "video",
-        );
-        let audio = match selection.audio_url.as_deref() {
-            Some(audio_url) => Some(prefix_m3u8_info(
-                parse_media_playlist_with_client(&client, audio_url).await?,
-                "audio",
-            )),
-            None => None,
-        };
-
-        return Ok(DownloadSource { video, audio });
+        return parse_selection_download_source_with_client(&client, &selection).await;
     }
 
-    let video = parse_media_playlist_with_client(&client, input).await?;
-    Ok(DownloadSource { video, audio: None })
+    parse_download_source_url_with_client(&client, input).await
 }
 
 fn build_client(options: &M3U8RequestOptions) -> Result<Client> {
@@ -283,57 +220,186 @@ async fn parse_media_playlist_with_client(client: &Client, m3u8_url: &str) -> Re
     let response = fetch_playlist_text(client, m3u8_url).await?;
 
     match m3u8_rs::parse_playlist_res(response.body.as_bytes()) {
-        Ok(Playlist::MediaPlaylist(playlist)) => {
-            let base_url = Url::parse(m3u8_url)?;
-            let mut full_segments = Vec::new();
-            let mut total_size = 0u64;
-            let mut has_size = false;
-            let mut current_key = None;
-            let mut current_map = None;
-            let mut map_file_names = HashMap::new();
-            let mut map_index = 0usize;
-            let media_sequence = playlist.media_sequence;
-
-            for (index, segment) in playlist.segments.into_iter().enumerate() {
-                if let Some(key) = segment.key.as_ref() {
-                    current_key = normalize_key(&base_url, key)?;
-                }
-                if let Some(map) = segment.map.as_ref() {
-                    current_map = Some(normalize_map(
-                        &base_url,
-                        map,
-                        &mut map_file_names,
-                        &mut map_index,
-                    )?);
-                }
-
-                let segment_url = base_url.join(&segment.uri)?;
-                full_segments.push(SegmentInfo {
-                    url: segment_url.to_string(),
-                    file_name: build_segment_file_name(index, &segment_url),
-                    duration: segment.duration,
-                    media_sequence: media_sequence + index as u64,
-                    key: current_key.clone(),
-                    init_map: current_map.clone(),
-                });
-
-                if let Some(byte_range) = segment.byte_range {
-                    total_size += byte_range.length;
-                    has_size = true;
-                }
-            }
-
-            Ok(M3U8Info {
-                segments: full_segments,
-                base_url: m3u8_url.to_string(),
-                total_size: if has_size { Some(total_size) } else { None },
-            })
-        }
+        Ok(Playlist::MediaPlaylist(playlist)) => parse_media_playlist(playlist, m3u8_url),
         Ok(Playlist::MasterPlaylist(_)) => Err(anyhow!(
             "目前暂不支持直接下载 Master Playlist，请先选择具体清晰度"
         )),
         _ => Err(parse_playlist_error(&response)),
     }
+}
+
+async fn parse_download_source_url_with_client(
+    client: &Client,
+    m3u8_url: &str,
+) -> Result<DownloadSource> {
+    let response = fetch_playlist_text(client, m3u8_url).await?;
+
+    match m3u8_rs::parse_playlist_res(response.body.as_bytes()) {
+        Ok(Playlist::MediaPlaylist(playlist)) => Ok(DownloadSource {
+            video: parse_media_playlist(playlist, m3u8_url)?,
+            audio: None,
+        }),
+        Ok(Playlist::MasterPlaylist(playlist)) => {
+            let variants = collect_variant_options(playlist, m3u8_url)?;
+            match variants.as_slice() {
+                [variant] => parse_variant_download_source_with_client(client, variant).await,
+                [] => Err(anyhow!("Master Playlist 中没有可下载的清晰度")),
+                _ => Err(anyhow!(
+                    "目前暂不支持直接下载 Master Playlist，请先选择具体清晰度"
+                )),
+            }
+        }
+        _ => Err(parse_playlist_error(&response)),
+    }
+}
+
+async fn parse_selection_download_source_with_client(
+    client: &Client,
+    selection: &M3U8StreamSelection,
+) -> Result<DownloadSource> {
+    parse_variant_urls_download_source_with_client(
+        client,
+        &selection.video_url,
+        selection.audio_url.as_deref(),
+    )
+    .await
+}
+
+async fn parse_variant_download_source_with_client(
+    client: &Client,
+    variant: &M3U8VariantOption,
+) -> Result<DownloadSource> {
+    parse_variant_urls_download_source_with_client(
+        client,
+        &variant.video_url,
+        variant.audio_url.as_deref(),
+    )
+    .await
+}
+
+async fn parse_variant_urls_download_source_with_client(
+    client: &Client,
+    video_url: &str,
+    audio_url: Option<&str>,
+) -> Result<DownloadSource> {
+    let video = prefix_m3u8_info(
+        parse_media_playlist_with_client(client, video_url).await?,
+        "video",
+    );
+    let audio = match audio_url {
+        Some(audio_url) => Some(prefix_m3u8_info(
+            parse_media_playlist_with_client(client, audio_url).await?,
+            "audio",
+        )),
+        None => None,
+    };
+
+    Ok(DownloadSource { video, audio })
+}
+
+fn parse_media_playlist(playlist: MediaPlaylist, m3u8_url: &str) -> Result<M3U8Info> {
+    let base_url = Url::parse(m3u8_url)?;
+    let mut full_segments = Vec::new();
+    let mut total_size = 0u64;
+    let mut has_size = false;
+    let mut current_key = None;
+    let mut current_map = None;
+    let mut map_file_names = HashMap::new();
+    let mut map_index = 0usize;
+    let media_sequence = playlist.media_sequence;
+
+    for (index, segment) in playlist.segments.into_iter().enumerate() {
+        if let Some(key) = segment.key.as_ref() {
+            current_key = normalize_key(&base_url, key)?;
+        }
+        if let Some(map) = segment.map.as_ref() {
+            current_map = Some(normalize_map(
+                &base_url,
+                map,
+                &mut map_file_names,
+                &mut map_index,
+            )?);
+        }
+
+        let segment_url = base_url.join(&segment.uri)?;
+        full_segments.push(SegmentInfo {
+            url: segment_url.to_string(),
+            file_name: build_segment_file_name(index, &segment_url),
+            duration: segment.duration,
+            media_sequence: media_sequence + index as u64,
+            key: current_key.clone(),
+            init_map: current_map.clone(),
+        });
+
+        if let Some(byte_range) = segment.byte_range {
+            total_size += byte_range.length;
+            has_size = true;
+        }
+    }
+
+    Ok(M3U8Info {
+        segments: full_segments,
+        base_url: m3u8_url.to_string(),
+        total_size: if has_size { Some(total_size) } else { None },
+    })
+}
+
+fn collect_variant_options(
+    playlist: MasterPlaylist,
+    m3u8_url: &str,
+) -> Result<Vec<M3U8VariantOption>> {
+    let base_url = Url::parse(m3u8_url)?;
+    let mut variants = Vec::new();
+
+    for variant in playlist.variants {
+        if variant.is_i_frame {
+            continue;
+        }
+
+        let video_url = base_url.join(&variant.uri)?.to_string();
+        let audio_rendition = variant.audio.as_ref().and_then(|group_id| {
+            playlist
+                .alternatives
+                .iter()
+                .filter(|media| {
+                    media.media_type == AlternativeMediaType::Audio
+                        && media.group_id == *group_id
+                        && media.uri.is_some()
+                })
+                .max_by_key(|media| {
+                    let default_score = if media.default {
+                        2
+                    } else if media.autoselect {
+                        1
+                    } else {
+                        0
+                    };
+                    (default_score, media.name.clone())
+                })
+        });
+
+        let audio_url = audio_rendition
+            .and_then(|media| media.uri.as_deref())
+            .map(|uri| base_url.join(uri))
+            .transpose()?
+            .map(|url| url.to_string());
+
+        variants.push(M3U8VariantOption {
+            video_url,
+            audio_url,
+            resolution: variant
+                .resolution
+                .as_ref()
+                .map(|resolution| format!("{}x{}", resolution.width, resolution.height)),
+            bandwidth: variant.bandwidth,
+            average_bandwidth: variant.average_bandwidth,
+            codecs: variant.codecs.clone(),
+            audio_name: audio_rendition.map(|media| media.name.clone()),
+            has_separate_audio: audio_rendition.is_some(),
+        });
+    }
+
+    Ok(variants)
 }
 
 struct PlaylistResponse {

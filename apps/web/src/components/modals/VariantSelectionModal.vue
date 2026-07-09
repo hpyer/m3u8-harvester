@@ -16,7 +16,7 @@ const formatBandwidth = (bandwidth: number, averageBandwidth: number | null) => 
       <div class="flex items-start justify-between gap-4 mb-5">
         <div>
           <h3 class="font-bold text-lg">选择清晰度</h3>
-          <p class="text-sm opacity-70 mt-1">检测到多清晰度 M3U8，请确认要下载的版本。</p>
+          <p class="text-sm opacity-70 mt-1">检测到 Master Playlist，请确认要下载的版本。</p>
         </div>
         <span class="badge badge-primary badge-outline">{{
           store.variantSelectionItems.length

@@ -567,7 +567,7 @@ export const useAppStore = defineStore('app', {
 
           try {
             const probe = await api.probeM3U8(url);
-            if (!probe.isMaster || probe.variants.length <= 1) {
+            if (!probe.isMaster || probe.variants.length === 0) {
               return null;
             }
 
