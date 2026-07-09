@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
+## [1.2.3] - 2026-07-09
+
+### Fixed
+
+- Fixed desktop release icon generation on Windows CI by running the Tauri CLI shim through the Windows shell and surfacing spawn errors.
+
 ## [1.2.2] - 2026-07-09
 
 ### Changed

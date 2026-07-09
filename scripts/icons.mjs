@@ -61,9 +61,14 @@ const generateDesktopIcons = () => {
     ['icon', 'src-tauri/icons/icon.png', '-o', 'src-tauri/icons'],
     {
       cwd: desktopDir,
+      shell: process.platform === 'win32',
       stdio: 'inherit',
     },
   );
+
+  if (result.error) {
+    console.error(`Failed to run Tauri icon generation: ${result.error.message}`);
+  }
 
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
