@@ -312,9 +312,10 @@ export const useAppStore = defineStore('app', {
         alert('删除任务失败');
       }
     },
-    openAddTaskModal(data?: Partial<AddTaskPayload>) {
+    openAddTaskModal(data?: Partial<AddTaskPayload>, startEpisode = 1) {
       this.closeVariantSelectionModal();
       this.resetTmdbTaskHelper();
+      this.tmdbStartEpisode = String(Math.max(1, startEpisode));
       if (data) {
         this.addTaskData = {
           title: data.title || '',

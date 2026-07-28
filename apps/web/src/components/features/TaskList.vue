@@ -164,12 +164,15 @@ const copyToClipboard = (text: string | null | undefined) => {
           <button
             class="btn btn-ghost btn-circle btn-xs md:btn-sm text-primary hover:bg-primary/10"
             @click.stop="
-              store.openAddTaskModal({
-                title: task.groupTitle || task.title,
-                category: task.type,
-                year: task.year ?? '',
-                season: task.season ?? '',
-              })
+              store.openAddTaskModal(
+                {
+                  title: task.groupTitle || task.title,
+                  category: task.type,
+                  year: task.year ?? '',
+                  season: task.season ?? '',
+                },
+                task.subtasks.length + 1,
+              )
             "
           >
             <CommonIcon name="plus" class-name="h-3.5 w-3.5 md:h-5 md:w-5" />

@@ -133,7 +133,7 @@ const updateManualTitle = (lineIndex: number, event: Event) => {
                 @input="store.updateTmdbEpisodeMapping"
               />
             </div>
-            <div v-if="store.selectedTmdbResult?.mediaType === 'tv'" class="form-control">
+            <div class="form-control">
               <label class="label py-1"><span class="label-text font-medium">起始集</span></label>
               <input
                 v-model="store.tmdbStartEpisode"
