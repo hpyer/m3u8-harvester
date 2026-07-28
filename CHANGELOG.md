@@ -4,12 +4,6 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
-## [1.2.5] - 2026-07-28
-
-### Fixed
-
-- Updated locked workspace package versions so release builds using `--locked` complete successfully.
-
 ## [1.2.4] - 2026-07-28
 
 ### Fixed
