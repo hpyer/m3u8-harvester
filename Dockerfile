@@ -16,7 +16,6 @@ RUN pnpm --filter @m3u8-harvester/web build
 # --- Stage 2: Backend Builder ---
 FROM rust:alpine AS backend-builder
 WORKDIR /app
-ARG TARGETPLATFORM
 RUN apk add --no-cache musl-dev
 ARG APP_DOCKER_IMAGE=ghcr.io/hpyer/m3u8-harvester
 ARG APP_DOCKER_VERSION=1.2.0
@@ -25,10 +24,11 @@ ENV APP_DOCKER_IMAGE=${APP_DOCKER_IMAGE}
 ENV APP_DOCKER_VERSION=${APP_DOCKER_VERSION}
 ENV APP_TAURI_VERSION=${APP_TAURI_VERSION}
 COPY . .
-# 使用锁文件保证本地与 CI 构建结果一致
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,id=cargo-target-${TARGETPLATFORM},target=/app/target \
+# Persisted by buildkit-cache-dance in GitHub Actions. Unlike a regular Buildx
+# cache export, these mounts retain Cargo's compiled target artifacts.
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=cargo-target,target=/app/target \
     cargo build --release --locked -p m3u8-server && \
     cp target/release/m3u8-server /tmp/m3u8-server
 
@@ -37,8 +37,7 @@ FROM alpine:3.19 AS runner
 WORKDIR /app
 
 # 安装运行时依赖
-RUN apk add --no-cache ffmpeg openssl libgcc libstdc++ && \
-    rm -rf /var/cache/apk/*
+RUN apk add --no-cache ffmpeg openssl libgcc libstdc++
 
 # 环境变量配置
 ENV RUST_LOG=info \
