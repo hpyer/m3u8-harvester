@@ -12,3 +12,6 @@ target/
 # Tauri generated icons. Keep only the source image in git.
 apps/desktop/src-tauri/icons/*
 !apps/desktop/src-tauri/icons/icon.png
+
+# Tauri generates capability schemas during desktop builds.
+apps/desktop/src-tauri/gen/schemas/
