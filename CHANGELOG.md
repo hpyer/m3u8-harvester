@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags.
 
+## [1.2.4] - 2026-07-28
+
+### Fixed
+
+- Kept the starting episode input available for manually created series tasks when TMDB is not configured.
+- Defaulted the starting episode for added series subtasks to the next episode after the existing subtask count.
+
 ## [1.2.3] - 2026-07-09
 
 ### Fixed
