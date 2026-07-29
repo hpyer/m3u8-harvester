@@ -9,6 +9,11 @@ target/
 *.db-journal
 .DS_Store
 
+# Local AI-agent skill adapters. The canonical, versioned definitions live in /skills.
+/.agents/skills/
+/.claude/skills/
+/.gemini/skills/
+
 # Tauri generated icons. Keep only the source image in git.
 apps/desktop/src-tauri/icons/*
 !apps/desktop/src-tauri/icons/icon.png

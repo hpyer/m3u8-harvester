@@ -86,6 +86,20 @@ This file gives coding agents the minimum project-specific context needed to mak
 - Tauri 2 platform dependencies are required for desktop development and packaging.
 - `ffmpeg` must be available on `PATH` for merge-related flows to work.
 
+## AI Agent Skills
+
+- Git only tracks the canonical project skills under `skills/`. Do not commit generated
+  adapter directories under `.agents/skills`, `.claude/skills`, or `.gemini/skills`.
+- Before relying on a project skill, create any missing local adapter directory for the
+  current platform. The adapter must point to the matching directory under `skills/` so
+  all agents load one source of truth.
+- On macOS or Linux, create relative symbolic links from each supported adapter directory
+  to `../../skills/<skill-name>`.
+- On Windows, create directory junctions to the absolute `skills/<skill-name>` path.
+  Do not replace a real, non-generated directory; report it instead.
+- After creating an adapter, refresh or restart the active agent so it re-scans skills.
+  Gemini CLI can use `/skills reload`.
+
 Optional local `.env` values from the project README:
 
 ```env

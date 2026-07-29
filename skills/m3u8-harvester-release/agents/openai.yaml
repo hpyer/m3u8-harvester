@@ -1,0 +1,4 @@
+interface:
+  display_name: "M3U8 Harvester Release"
+  short_description: "Project-specific release and validation workflow"
+  default_prompt: "Use $m3u8-harvester-release to release the next m3u8-harvester version."
